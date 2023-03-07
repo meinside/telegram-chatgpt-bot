@@ -2,6 +2,8 @@
 
 A telegram bot which answers to messages with [ChatGPT API](https://platform.openai.com/docs/api-reference/chat).
 
+<img width="631" alt="telegram_chatgpt_bot" src="https://user-images.githubusercontent.com/185988/223349127-d9934ecb-d1cb-4825-8f6a-7de4b4c12c20.png">
+
 ## Prerequisites
 
 * A [paid OpenAI account](https://openai.com/pricing), and
