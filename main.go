@@ -83,17 +83,24 @@ func runBot(conf config) {
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
 				if update.HasMessage() && update.Message.HasText() {
+					chatID := update.Message.Chat.ID
+					userID := update.Message.From.ID
 					message := *update.Message.Text
 
 					if !strings.HasPrefix(message, "/") {
-						answer(bot, client, conf, message, update.Message.Chat.ID, update.Message.From.ID)
+						// classify message
+						if reason, flagged := isFlagged(client, message); flagged {
+							send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID)
+						} else {
+							answer(bot, client, conf, message, chatID, userID)
+						}
 					} else {
 						switch message {
 						case cmdStart:
-							send(bot, conf, msgStart, update.Message.Chat.ID)
+							send(bot, conf, msgStart, chatID)
 						// TODO: process more bot commands here
 						default:
-							send(bot, conf, fmt.Sprintf(msgCmdNotSupported, message), update.Message.Chat.ID)
+							send(bot, conf, fmt.Sprintf(msgCmdNotSupported, message), chatID)
 						}
 					}
 				}
@@ -160,6 +167,32 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, message string, cha
 		}
 	} else {
 		log.Printf("failed to create chat completion: %s", err)
+	}
+}
+
+// check if given message is flagged or not
+func isFlagged(client *openai.Client, message string) (output string, flagged bool) {
+	if response, err := client.CreateModeration(message, openai.ModerationOptions{}); err == nil {
+		// test
+		log.Printf("classification response = %+v", response)
+
+		for _, classification := range response.Results {
+			if classification.Flagged {
+				categories := []string{}
+
+				for k, v := range classification.Categories {
+					if v {
+						categories = append(categories, k)
+					}
+				}
+
+				return fmt.Sprintf("'%s' was flagged due to following reason(s): %s", message, strings.Join(categories, ", ")), true
+			}
+		}
+
+		return "", false
+	} else {
+		return fmt.Sprintf("failed to classify message: '%s' with error: %s", message, err), true
 	}
 }
 
