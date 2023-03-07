@@ -195,7 +195,7 @@ func isFlagged(client *openai.Client, message string) (output string, flagged bo
 
 // generate a user-agent value
 func userAgent(userID int64) string {
-	return fmt.Sprintf("chatgtp-bot:%d", userID)
+	return fmt.Sprintf("telegram-chatgpt-bot:%d", userID)
 }
 
 // generate user's name
