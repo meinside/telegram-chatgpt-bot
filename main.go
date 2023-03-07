@@ -173,9 +173,6 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, message string, cha
 // check if given message is flagged or not
 func isFlagged(client *openai.Client, message string) (output string, flagged bool) {
 	if response, err := client.CreateModeration(message, openai.ModerationOptions{}); err == nil {
-		// test
-		log.Printf("classification response = %+v", response)
-
 		for _, classification := range response.Results {
 			if classification.Flagged {
 				categories := []string{}
