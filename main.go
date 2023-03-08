@@ -92,7 +92,8 @@ func runBot(conf config) {
 						if reason, flagged := isFlagged(client, message); flagged {
 							send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID)
 						} else {
-							answer(bot, client, conf, message, chatID, userID)
+							messageID := update.Message.MessageID
+							answer(bot, client, conf, message, chatID, userID, messageID)
 						}
 					} else {
 						switch message {
@@ -138,7 +139,7 @@ func send(bot *tg.Bot, conf config, message string, chatID int64) {
 }
 
 // generate an answer to given message and send it to the chat
-func answer(bot *tg.Bot, client *openai.Client, conf config, message string, chatID, userID int64) {
+func answer(bot *tg.Bot, client *openai.Client, conf config, message string, chatID, userID, messageID int64) {
 	bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 	if response, err := client.CreateChatCompletion(chatCompletionModel,
@@ -162,7 +163,11 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, message string, cha
 			log.Printf("[verbose] sending answer to chat(%d): '%s'", chatID, answer)
 		}
 
-		if res := bot.SendMessage(chatID, answer, tg.OptionsSendMessage{}); !res.Ok {
+		if res := bot.SendMessage(
+			chatID,
+			answer,
+			tg.OptionsSendMessage{}.
+				SetReplyToMessageID(messageID)); !res.Ok {
 			log.Printf("failed to answer message '%s' with '%s': %s", message, answer, err)
 		}
 	} else {
