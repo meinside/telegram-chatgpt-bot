@@ -152,6 +152,8 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, message string, cha
 			log.Printf("[verbose] %s ===> %+v", message, response.Choices)
 		}
 
+		bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
+
 		var answer string
 		if len(response.Choices) > 0 {
 			answer = response.Choices[0].Message.Content
