@@ -82,31 +82,37 @@ func runBot(conf config) {
 
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
-				if update.HasMessage() && update.Message.HasText() {
-					chatID := update.Message.Chat.ID
-					userID := update.Message.From.ID
-					message := *update.Message.Text
+				var message *tg.Message
 
-					if !strings.HasPrefix(message, "/") {
-						// classify message
-						if reason, flagged := isFlagged(client, message); flagged {
-							send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID)
-						} else {
-							messageID := update.Message.MessageID
-							answer(bot, client, conf, message, chatID, userID, messageID)
-						}
+				if update.HasMessage() && update.Message.HasText() {
+					message = update.Message
+				} else if update.HasEditedMessage() && update.EditedMessage.HasText() {
+					message = update.EditedMessage
+				}
+
+				chatID := message.Chat.ID
+				userID := message.From.ID
+				txt := *message.Text
+
+				if !strings.HasPrefix(txt, "/") {
+					// classify message
+					if reason, flagged := isFlagged(client, txt); flagged {
+						send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID)
 					} else {
-						switch message {
-						case cmdStart:
-							send(bot, conf, msgStart, chatID)
-						// TODO: process more bot commands here
-						default:
-							send(bot, conf, fmt.Sprintf(msgCmdNotSupported, message), chatID)
-						}
+						messageID := message.MessageID
+						answer(bot, client, conf, txt, chatID, userID, messageID)
+					}
+				} else {
+					switch txt {
+					case cmdStart:
+						send(bot, conf, msgStart, chatID)
+					// TODO: process more bot commands here
+					default:
+						send(bot, conf, fmt.Sprintf(msgCmdNotSupported, txt), chatID)
 					}
 				}
 			} else {
-				log.Printf("not allowed: %s", userName(update.Message.From))
+				log.Printf("not allowed: %s", userNameFromUpdate(&update))
 			}
 		})
 	} else {
@@ -217,6 +223,18 @@ func userName(user *tg.User) string {
 	} else {
 		return user.FirstName
 	}
+}
+
+// generate user's name from update
+func userNameFromUpdate(update *tg.Update) string {
+	var user *tg.User
+	if update.HasMessage() {
+		user = update.Message.From
+	} else if update.HasEditedMessage() {
+		user = update.EditedMessage.From
+	}
+
+	return userName(user)
 }
 
 // print usage string
