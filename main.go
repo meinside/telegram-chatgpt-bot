@@ -116,10 +116,15 @@ func runBot(conf config) {
 
 // checks if given update is allowed or not
 func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
-	if update.Message.From.Username != nil {
-		if _, exists := allowedUsers[*update.Message.From.Username]; exists {
-			return true
-		}
+	var username string
+	if update.HasMessage() && update.Message.From.Username != nil {
+		username = *update.Message.From.Username
+	} else if update.HasEditedMessage() && update.EditedMessage.From.Username != nil {
+		username = *update.EditedMessage.From.Username
+	}
+
+	if _, exists := allowedUsers[username]; exists {
+		return true
 	}
 
 	return false
