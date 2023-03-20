@@ -66,6 +66,9 @@ func runBot(conf config) {
 	bot := tg.NewClient(token)
 	client := openai.NewClient(apiKey, orgID)
 
+	// set verbosity
+	client.Verbose = conf.Verbose
+
 	if b := bot.GetMe(); b.Ok {
 		log.Printf("launching bot: %s", userName(b.Result))
 
