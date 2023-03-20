@@ -25,6 +25,7 @@ and set your values:
     "telegram_bot_token": "123456:abcdefghijklmnop-QRSTUVWXYZ7890",
     "openai_api_key": "key-ABCDEFGHIJK1234567890",
     "openai_org_id": "org-1234567890abcdefghijk",
+    "openai_model": "gpt-3.5-turbo",
     "allowed_telegram_users": ["user1", "user2"],
     "verbose": false
 }
