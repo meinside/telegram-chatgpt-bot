@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	chatCompletionModel = "gpt-3.5-turbo"
+	chatCompletionModelDefault = "gpt-3.5-turbo"
 )
 
 const (
@@ -33,6 +33,7 @@ type config struct {
 	// openai api
 	OpenAIAPIKey         string `json:"openai_api_key"`
 	OpenAIOrganizationID string `json:"openai_org_id"`
+	OpenAIModel          string `json:"openai_model,omitempty"`
 
 	// other configurations
 	AllowedTelegramUsers []string `json:"allowed_telegram_users"`
@@ -141,7 +142,12 @@ func send(bot *tg.Bot, conf config, message string, chatID int64) {
 func answer(bot *tg.Bot, client *openai.Client, conf config, message string, chatID, userID, messageID int64) {
 	bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
-	if response, err := client.CreateChatCompletion(chatCompletionModel,
+	model := conf.OpenAIModel
+	if model == "" {
+		model = chatCompletionModelDefault
+	}
+
+	if response, err := client.CreateChatCompletion(model,
 		[]openai.ChatMessage{
 			openai.NewChatUserMessage(message),
 		},
