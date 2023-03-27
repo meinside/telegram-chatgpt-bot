@@ -2,7 +2,11 @@
 
 A telegram bot which answers to messages with [ChatGPT API](https://platform.openai.com/docs/api-reference/chat).
 
-<img width="631" alt="telegram_chatgpt_bot" src="https://user-images.githubusercontent.com/185988/223349127-d9934ecb-d1cb-4825-8f6a-7de4b4c12c20.png">
+<img width="630" alt="1" src="https://user-images.githubusercontent.com/185988/227860711-fcb9b464-4c11-4de3-94d6-9e3cd68ce0c8.png">
+
+You can also reply to messages for keeping the context of your conversation:
+
+<img width="629" alt="2" src="https://user-images.githubusercontent.com/185988/227860693-a934b46f-6e28-45ff-a566-34ebd94045cf.png">
 
 ## Prerequisites
 
