@@ -74,13 +74,14 @@ func runBot(conf config) {
 
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
-				var message *tg.Message
+				var message, replyTo *tg.Message
 
 				if update.HasMessage() && update.Message.HasText() {
 					message = update.Message
 				} else if update.HasEditedMessage() && update.EditedMessage.HasText() {
 					message = update.EditedMessage
 				}
+				replyTo = repliedToMessage(message)
 
 				chatID := message.Chat.ID
 				userID := message.From.ID
@@ -92,7 +93,15 @@ func runBot(conf config) {
 						send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID)
 					} else {
 						messageID := message.MessageID
-						answer(bot, client, conf, txt, chatID, userID, messageID)
+
+						// chat messages for generation
+						messages := []openai.ChatMessage{}
+						if replyTo != nil {
+							messages = append(messages, convertMessage(replyTo))
+						}
+						messages = append(messages, convertMessage(message))
+
+						answer(bot, client, conf, messages, chatID, userID, messageID)
 					}
 				} else {
 					switch txt {
@@ -130,7 +139,7 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 
 // send given message to the chat
 func send(bot *tg.Bot, conf config, message string, chatID int64) {
-	bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
+	_ = bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 	if conf.Verbose {
 		log.Printf("[verbose] sending message to chat(%d): '%s'", chatID, message)
@@ -142,8 +151,8 @@ func send(bot *tg.Bot, conf config, message string, chatID int64) {
 }
 
 // generate an answer to given message and send it to the chat
-func answer(bot *tg.Bot, client *openai.Client, conf config, message string, chatID, userID, messageID int64) {
-	bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
+func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.ChatMessage, chatID, userID, messageID int64) {
+	_ = bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 	model := conf.OpenAIModel
 	if model == "" {
@@ -151,16 +160,14 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, message string, cha
 	}
 
 	if response, err := client.CreateChatCompletion(model,
-		[]openai.ChatMessage{
-			openai.NewChatUserMessage(message),
-		},
+		messages,
 		openai.ChatCompletionOptions{}.
 			SetUser(userAgent(userID))); err == nil {
 		if conf.Verbose {
-			log.Printf("[verbose] %s ===> %+v", message, response.Choices)
+			log.Printf("[verbose] %+v ===> %+v", messages, response.Choices)
 		}
 
-		bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
+		_ = bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 		var answer string
 		if len(response.Choices) > 0 {
@@ -178,7 +185,7 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, message string, cha
 			answer,
 			tg.OptionsSendMessage{}.
 				SetReplyToMessageID(messageID)); !res.Ok {
-			log.Printf("failed to answer message '%s' with '%s': %s", message, answer, err)
+			log.Printf("failed to answer messages '%+v' with '%s': %s", messages, answer, err)
 		}
 	} else {
 		log.Printf("failed to create chat completion: %s", err)
@@ -232,4 +239,23 @@ func userNameFromUpdate(update *tg.Update) string {
 	}
 
 	return userName(user)
+}
+
+// get original message which was replied by given `message`
+func repliedToMessage(message *tg.Message) *tg.Message {
+	if message.ReplyToMessage != nil {
+		return message.ReplyToMessage
+	}
+
+	return nil
+}
+
+// convert telegram bot message to openai chat message
+// (if it was sent from bot, make it an assistant's message)
+func convertMessage(message *tg.Message) openai.ChatMessage {
+	if message.ViaBot != nil &&
+		message.ViaBot.IsBot {
+		return openai.NewChatAssistantMessage(*message.Text)
+	}
+	return openai.NewChatUserMessage(*message.Text)
 }
