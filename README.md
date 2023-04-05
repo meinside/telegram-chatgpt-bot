@@ -8,6 +8,10 @@ You can also reply to messages for keeping the context of your conversation:
 
 <img width="629" alt="2" src="https://user-images.githubusercontent.com/185988/227860693-a934b46f-6e28-45ff-a566-34ebd94045cf.png">
 
+You can count the number of tokens of text with `/count` command:
+
+<img width="630" alt="count_command" src="https://user-images.githubusercontent.com/185988/230024392-fba2c0b1-ba5e-42db-8a84-9f9653051d00.png">
+
 ## Prerequisites
 
 * A [paid OpenAI account](https://openai.com/pricing), and
