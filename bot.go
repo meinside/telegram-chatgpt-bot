@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/meinside/geektoken"
 	"github.com/meinside/openai-go"
 	tg "github.com/meinside/telegram-bot-go"
 )
@@ -20,9 +21,12 @@ const (
 const (
 	intervalSeconds = 1
 
-	cmdStart           = "/start"
+	cmdStart = "/start"
+	cmdCount = "/count"
+
 	msgStart           = "This bot will answer your messages with ChatGPT API :-)"
 	msgCmdNotSupported = "Not a supported bot command: %s"
+	msgTokenCount      = "%d tokens in %d chars (cl100k_base)"
 )
 
 // config struct for loading a configuration file
@@ -86,14 +90,13 @@ func runBot(conf config) {
 				chatID := message.Chat.ID
 				userID := message.From.ID
 				txt := *message.Text
+				messageID := message.MessageID
 
 				if !strings.HasPrefix(txt, "/") {
 					// classify message
 					if reason, flagged := isFlagged(client, txt); flagged {
-						send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID)
+						send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID, &messageID)
 					} else {
-						messageID := message.MessageID
-
 						// chat messages for generation
 						messages := []openai.ChatMessage{}
 						if replyTo != nil {
@@ -106,10 +109,21 @@ func runBot(conf config) {
 				} else {
 					switch txt {
 					case cmdStart:
-						send(bot, conf, msgStart, chatID)
+						send(bot, conf, msgStart, chatID, nil)
 					// TODO: process more bot commands here
 					default:
-						send(bot, conf, fmt.Sprintf(msgCmdNotSupported, txt), chatID)
+						var msg string
+						if strings.HasPrefix(txt, cmdCount) {
+							txtToCount := strings.TrimSpace(strings.Replace(txt, cmdCount, "", 1))
+							if count, err := countTokens(txtToCount); err == nil {
+								msg = fmt.Sprintf(msgTokenCount, count, len(txtToCount))
+							} else {
+								msg = err.Error()
+							}
+						} else {
+							msg = fmt.Sprintf(msgCmdNotSupported, txt)
+						}
+						send(bot, conf, msg, chatID, &messageID)
 					}
 				}
 			} else {
@@ -138,14 +152,18 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 }
 
 // send given message to the chat
-func send(bot *tg.Bot, conf config, message string, chatID int64) {
+func send(bot *tg.Bot, conf config, message string, chatID int64, messageID *int64) {
 	_ = bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 	if conf.Verbose {
 		log.Printf("[verbose] sending message to chat(%d): '%s'", chatID, message)
 	}
 
-	if res := bot.SendMessage(chatID, message, tg.OptionsSendMessage{}); !res.Ok {
+	options := tg.OptionsSendMessage{}
+	if messageID != nil {
+		options.SetReplyToMessageID(*messageID)
+	}
+	if res := bot.SendMessage(chatID, message, options); !res.Ok {
 		log.Printf("failed to send message: %s", *res.Description)
 	}
 }
@@ -258,4 +276,34 @@ func convertMessage(message *tg.Message) openai.ChatMessage {
 		return openai.NewChatAssistantMessage(*message.Text)
 	}
 	return openai.NewChatUserMessage(*message.Text)
+}
+
+var _tokenizer *geektoken.Tokenizer = nil
+
+// count BPE tokens for given `text`
+func countTokens(text string) (result int, err error) {
+	result = 0
+
+	// lazy-load the tokenizer
+	if _tokenizer == nil {
+		var tokenizer geektoken.Tokenizer
+		tokenizer, err = geektoken.GetTokenizerWithEncoding(geektoken.EncodingCl100kBase)
+
+		if err == nil {
+			_tokenizer = &tokenizer
+		}
+	}
+
+	if _tokenizer == nil {
+		return 0, fmt.Errorf("tokenizer is not initialized.")
+	}
+
+	tokens := []int{}
+	tokens, err = _tokenizer.Encode(text, nil, nil)
+
+	if err == nil {
+		return len(tokens), nil
+	}
+
+	return result, err
 }
