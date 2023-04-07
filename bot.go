@@ -5,9 +5,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/meinside/geektoken"
 	"github.com/meinside/openai-go"
@@ -73,59 +76,14 @@ func runBot(conf config) {
 	// set verbosity
 	client.Verbose = conf.Verbose
 
+	_ = bot.DeleteWebhook(false) // delete webhook before polling updates
 	if b := bot.GetMe(); b.Ok {
 		log.Printf("launching bot: %s", userName(b.Result))
 
+		// poll updates
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
-				var message, replyTo *tg.Message
-
-				if update.HasMessage() && update.Message.HasText() {
-					message = update.Message
-				} else if update.HasEditedMessage() && update.EditedMessage.HasText() {
-					message = update.EditedMessage
-				}
-				replyTo = repliedToMessage(message)
-
-				chatID := message.Chat.ID
-				userID := message.From.ID
-				txt := *message.Text
-				messageID := message.MessageID
-
-				if !strings.HasPrefix(txt, "/") {
-					// classify message
-					if reason, flagged := isFlagged(client, txt); flagged {
-						send(bot, conf, fmt.Sprintf("Could not handle message: %s.", reason), chatID, &messageID)
-					} else {
-						// chat messages for generation
-						messages := []openai.ChatMessage{}
-						if replyTo != nil {
-							messages = append(messages, convertMessage(replyTo))
-						}
-						messages = append(messages, convertMessage(message))
-
-						answer(bot, client, conf, messages, chatID, userID, messageID)
-					}
-				} else {
-					switch txt {
-					case cmdStart:
-						send(bot, conf, msgStart, chatID, nil)
-					// TODO: process more bot commands here
-					default:
-						var msg string
-						if strings.HasPrefix(txt, cmdCount) {
-							txtToCount := strings.TrimSpace(strings.Replace(txt, cmdCount, "", 1))
-							if count, err := countTokens(txtToCount); err == nil {
-								msg = fmt.Sprintf(msgTokenCount, count, len(txtToCount))
-							} else {
-								msg = err.Error()
-							}
-						} else {
-							msg = fmt.Sprintf(msgCmdNotSupported, txt)
-						}
-						send(bot, conf, msg, chatID, &messageID)
-					}
-				}
+				handleUpdate(bot, client, conf, update)
 			} else {
 				log.Printf("not allowed: %s", userNameFromUpdate(&update))
 			}
@@ -149,6 +107,87 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 	}
 
 	return false
+}
+
+// handle allowed update from telegram bot api
+func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Update) {
+	message := usableMessageFromUpdate(update)
+	chatID := message.Chat.ID
+	userID := message.From.ID
+	messageID := message.MessageID
+
+	if message.HasText() && strings.HasPrefix(*message.Text, "/") {
+		cmd := *message.Text
+		switch cmd {
+		case cmdStart:
+			send(bot, conf, msgStart, chatID, nil)
+		// TODO: process more bot commands here
+		default:
+			var msg string
+			if strings.HasPrefix(cmd, cmdCount) {
+				txtToCount := strings.TrimSpace(strings.Replace(cmd, cmdCount, "", 1))
+				if count, err := countTokens(txtToCount); err == nil {
+					msg = fmt.Sprintf(msgTokenCount, count, len(txtToCount))
+				} else {
+					msg = err.Error()
+				}
+			} else {
+				msg = fmt.Sprintf(msgCmdNotSupported, cmd)
+			}
+			send(bot, conf, msg, chatID, &messageID)
+			return
+		}
+	} else {
+		messages := chatMessagesFromUpdate(bot, update)
+		if len(messages) > 0 {
+			answer(bot, client, conf, messages, chatID, userID, messageID)
+		} else {
+			log.Printf("No converted chat messages from update: %+v", update)
+
+			msg := fmt.Sprintf("Failed to get usable chat messages from your input. See the server logs for more information.")
+			send(bot, conf, msg, chatID, &messageID)
+		}
+	}
+}
+
+// get usable message from given update
+func usableMessageFromUpdate(update tg.Update) (message *tg.Message) {
+	if update.HasMessage() && update.Message.HasText() {
+		message = update.Message
+	} else if update.HasMessage() && update.Message.HasDocument() {
+		message = update.Message
+	} else if update.HasEditedMessage() && update.EditedMessage.HasText() {
+		message = update.EditedMessage
+	}
+
+	return message
+}
+
+// convert telegram bot update into openai chat messages
+func chatMessagesFromUpdate(bot *tg.Bot, update tg.Update) (chatMessages []openai.ChatMessage) {
+	chatMessages = []openai.ChatMessage{}
+
+	var message *tg.Message
+	if update.HasMessage() {
+		message = update.Message
+	} else if update.HasEditedMessage() {
+		message = update.EditedMessage
+	}
+	replyTo := repliedToMessage(message)
+
+	// chat message 1
+	if replyTo != nil {
+		if chatMessage := convertMessage(bot, replyTo); chatMessage != nil {
+			chatMessages = append(chatMessages, *chatMessage)
+		}
+	}
+
+	// chat message 2
+	if chatMessage := convertMessage(bot, message); chatMessage != nil {
+		chatMessages = append(chatMessages, *chatMessage)
+	}
+
+	return chatMessages
 }
 
 // send given message to the chat
@@ -191,45 +230,44 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 		if len(response.Choices) > 0 {
 			answer = response.Choices[0].Message.Content
 		} else {
-			answer = "No response from API."
+			answer = "There was no response from OpenAI API."
 		}
 
 		if conf.Verbose {
 			log.Printf("[verbose] sending answer to chat(%d): '%s'", chatID, answer)
 		}
 
-		if res := bot.SendMessage(
-			chatID,
-			answer,
-			tg.OptionsSendMessage{}.
-				SetReplyToMessageID(messageID)); !res.Ok {
-			log.Printf("failed to answer messages '%+v' with '%s': %s", messages, answer, err)
+		// if answer is too long for telegram api, send it as a text document
+		if len(answer) > 4096 {
+			file := tg.InputFileFromBytes([]byte(answer))
+			if res := bot.SendDocument(
+				chatID,
+				file,
+				tg.OptionsSendDocument{}.
+					SetReplyToMessageID(messageID).
+					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); !res.Ok {
+				log.Printf("failed to answer messages '%+v' with '%s' as file: %s", messages, answer, err)
+
+				msg := fmt.Sprintf("Failed to send you the answer as a text file. See the server logs for more information.")
+				send(bot, conf, msg, chatID, &messageID)
+			}
+		} else {
+			if res := bot.SendMessage(
+				chatID,
+				answer,
+				tg.OptionsSendMessage{}.
+					SetReplyToMessageID(messageID)); !res.Ok {
+				log.Printf("failed to answer messages '%+v' with '%s': %s", messages, answer, err)
+
+				msg := fmt.Sprintf("Failed to send you the answer as a text. See the server logs for more information.")
+				send(bot, conf, msg, chatID, &messageID)
+			}
 		}
 	} else {
 		log.Printf("failed to create chat completion: %s", err)
-	}
-}
 
-// check if given message is flagged or not
-func isFlagged(client *openai.Client, message string) (output string, flagged bool) {
-	if response, err := client.CreateModeration(message, openai.ModerationOptions{}); err == nil {
-		for _, classification := range response.Results {
-			if classification.Flagged {
-				categories := []string{}
-
-				for k, v := range classification.Categories {
-					if v {
-						categories = append(categories, k)
-					}
-				}
-
-				return fmt.Sprintf("'%s' was flagged due to following reason(s): %s", message, strings.Join(categories, ", ")), true
-			}
-		}
-
-		return "", false
-	} else {
-		return fmt.Sprintf("failed to classify message: '%s' with error: %s", message, err), true
+		msg := fmt.Sprintf("Failed to generate an answer from OpenAI. See the server logs for more information.")
+		send(bot, conf, msg, chatID, &messageID)
 	}
 }
 
@@ -268,14 +306,53 @@ func repliedToMessage(message *tg.Message) *tg.Message {
 	return nil
 }
 
-// convert telegram bot message to openai chat message
+// convert given telegram bot message to an openai chat message,
+// nil if there was any error.
+//
 // (if it was sent from bot, make it an assistant's message)
-func convertMessage(message *tg.Message) openai.ChatMessage {
+func convertMessage(bot *tg.Bot, message *tg.Message) *openai.ChatMessage {
 	if message.ViaBot != nil &&
 		message.ViaBot.IsBot {
-		return openai.NewChatAssistantMessage(*message.Text)
+		if message.HasText() {
+			chatMessage := openai.NewChatAssistantMessage(*message.Text)
+			return &chatMessage
+		} else if message.HasDocument() {
+			if bytes, err := documentText(bot, message.Document); err == nil {
+				str := strings.TrimSpace(strings.ToValidUTF8(string(bytes), "?"))
+				chatMessage := openai.NewChatAssistantMessage(str)
+				return &chatMessage
+			} else {
+				log.Printf("failed to read document content for assistant message: %s", err)
+			}
+		}
 	}
-	return openai.NewChatUserMessage(*message.Text)
+
+	if message.HasText() {
+		chatMessage := openai.NewChatUserMessage(*message.Text)
+		return &chatMessage
+	} else if message.HasDocument() {
+		if bytes, err := documentText(bot, message.Document); err == nil {
+			str := strings.TrimSpace(strings.ToValidUTF8(string(bytes), "?"))
+			chatMessage := openai.NewChatUserMessage(str)
+			return &chatMessage
+		} else {
+			log.Printf("failed to read document content for user message: %s", err)
+		}
+	}
+
+	return nil
+}
+
+// read bytes from given document
+func documentText(bot *tg.Bot, document *tg.Document) (result []byte, err error) {
+	if res := bot.GetFile(document.FileID); !res.Ok {
+		err = fmt.Errorf("Failed to get document: %s", *res.Description)
+	} else {
+		fileURL := bot.GetFileURL(*res.Result)
+		result, err = readFileContentAtURL(fileURL)
+	}
+
+	return result, err
 }
 
 var _tokenizer *geektoken.Tokenizer = nil
@@ -306,4 +383,25 @@ func countTokens(text string) (result int, err error) {
 	}
 
 	return result, err
+}
+
+// read file content at given url, will timeout in 60 seconds
+func readFileContentAtURL(url string) (content []byte, err error) {
+	httpClient := http.Client{
+		Timeout: time.Second * 60,
+	}
+
+	var resp *http.Response
+	resp, err = httpClient.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	content, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
 }
