@@ -112,6 +112,11 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 // handle allowed update from telegram bot api
 func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Update) {
 	message := usableMessageFromUpdate(update)
+	if message == nil {
+		log.Printf("no usable message from update.")
+		return
+	}
+
 	chatID := message.Chat.ID
 	userID := message.From.ID
 	messageID := message.MessageID
@@ -142,7 +147,7 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Upd
 		if len(messages) > 0 {
 			answer(bot, client, conf, messages, chatID, userID, messageID)
 		} else {
-			log.Printf("No converted chat messages from update: %+v", update)
+			log.Printf("no converted chat messages from update: %+v", update)
 
 			msg := "Failed to get usable chat messages from your input. See the server logs for more information."
 			send(bot, conf, msg, chatID, &messageID)
