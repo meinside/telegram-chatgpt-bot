@@ -5,7 +5,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -144,7 +144,7 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Upd
 		} else {
 			log.Printf("No converted chat messages from update: %+v", update)
 
-			msg := fmt.Sprintf("Failed to get usable chat messages from your input. See the server logs for more information.")
+			msg := "Failed to get usable chat messages from your input. See the server logs for more information."
 			send(bot, conf, msg, chatID, &messageID)
 		}
 	}
@@ -248,7 +248,7 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); !res.Ok {
 				log.Printf("failed to answer messages '%+v' with '%s' as file: %s", messages, answer, err)
 
-				msg := fmt.Sprintf("Failed to send you the answer as a text file. See the server logs for more information.")
+				msg := "Failed to send you the answer as a text file. See the server logs for more information."
 				send(bot, conf, msg, chatID, &messageID)
 			}
 		} else {
@@ -259,14 +259,14 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 					SetReplyToMessageID(messageID)); !res.Ok {
 				log.Printf("failed to answer messages '%+v' with '%s': %s", messages, answer, err)
 
-				msg := fmt.Sprintf("Failed to send you the answer as a text. See the server logs for more information.")
+				msg := "Failed to send you the answer as a text. See the server logs for more information."
 				send(bot, conf, msg, chatID, &messageID)
 			}
 		}
 	} else {
 		log.Printf("failed to create chat completion: %s", err)
 
-		msg := fmt.Sprintf("Failed to generate an answer from OpenAI. See the server logs for more information.")
+		msg := "Failed to generate an answer from OpenAI. See the server logs for more information."
 		send(bot, conf, msg, chatID, &messageID)
 	}
 }
@@ -375,7 +375,7 @@ func countTokens(text string) (result int, err error) {
 		return 0, fmt.Errorf("tokenizer is not initialized.")
 	}
 
-	tokens := []int{}
+	var tokens []int
 	tokens, err = _tokenizer.Encode(text, nil, nil)
 
 	if err == nil {
@@ -398,7 +398,7 @@ func readFileContentAtURL(url string) (content []byte, err error) {
 	}
 	defer resp.Body.Close()
 
-	content, err = ioutil.ReadAll(resp.Body)
+	content, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
