@@ -4,5 +4,5 @@ github.com/meinside/geektoken v0.0.1 h1:KyVZwSsl6yD6UzaWfR8G48S64IhS+HNaKEHzMLKj
 github.com/meinside/geektoken v0.0.1/go.mod h1:fcHibWofTfmj/ZgdWRMyWvt8FtmrD4mB8hCFKiF133c=
 github.com/meinside/openai-go v0.0.5 h1:TJWDQeI5nw5U5hAyrXgppLjeggc4V6R0g2VvL9egOWg=
 github.com/meinside/openai-go v0.0.5/go.mod h1:dgAFcjVzLjIwKgjSycPHjkml63gBRi4b/k7BskxaNaI=
-github.com/meinside/telegram-bot-go v0.8.4 h1:6gQzljDAPvLdLL4wHVUS1HsFszOBxkMxcpFd5TAyL/4=
-github.com/meinside/telegram-bot-go v0.8.4/go.mod h1:fo8x0nah9sfQJnylpjOjhEVlLVkSGFAwTmVQOFnX92Y=
+github.com/meinside/telegram-bot-go v0.8.5 h1:0Rzy20TJubXn2js4RlySDfEGDyi6Z0WLo2VMZKQnrL0=
+github.com/meinside/telegram-bot-go v0.8.5/go.mod h1:fo8x0nah9sfQJnylpjOjhEVlLVkSGFAwTmVQOFnX92Y=
