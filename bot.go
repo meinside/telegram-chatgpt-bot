@@ -42,6 +42,9 @@ type config struct {
 	OpenAIOrganizationID string `json:"openai_org_id"`
 	OpenAIModel          string `json:"openai_model,omitempty"`
 
+	// database logging
+	RequestLogsDBFilepath string `json:"db_filepath,omitempty"`
+
 	// other configurations
 	AllowedTelegramUsers []string `json:"allowed_telegram_users"`
 	Verbose              bool     `json:"verbose,omitempty"`
@@ -80,12 +83,20 @@ func runBot(conf config) {
 	if b := bot.GetMe(); b.Ok {
 		log.Printf("launching bot: %s", userName(b.Result))
 
+		var db *Database = nil
+		if conf.RequestLogsDBFilepath != "" {
+			var err error
+			if db, err = OpenDatabase(conf.RequestLogsDBFilepath); err != nil {
+				log.Printf("failed to open request logs db: %s", err)
+			}
+		}
+
 		// poll updates
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
-				handleUpdate(bot, client, conf, update)
+				handleUpdate(bot, client, conf, db, update)
 			} else {
-				log.Printf("not allowed: %s", userNameFromUpdate(&update))
+				log.Printf("not allowed: %s", userNameFromUpdate(update))
 			}
 		})
 	} else {
@@ -110,7 +121,7 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 }
 
 // handle allowed update from telegram bot api
-func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Update) {
+func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database, update tg.Update) {
 	message := usableMessageFromUpdate(update)
 	if message == nil {
 		log.Printf("no usable message from update.")
@@ -145,7 +156,7 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Upd
 	} else {
 		messages := chatMessagesFromUpdate(bot, update)
 		if len(messages) > 0 {
-			answer(bot, client, conf, messages, chatID, userID, messageID)
+			answer(bot, client, conf, db, messages, chatID, userID, userNameFromUpdate(update), messageID)
 		} else {
 			log.Printf("no converted chat messages from update: %+v", update)
 
@@ -213,7 +224,7 @@ func send(bot *tg.Bot, conf config, message string, chatID int64, messageID *int
 }
 
 // generate an answer to given message and send it to the chat
-func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.ChatMessage, chatID, userID, messageID int64) {
+func answer(bot *tg.Bot, client *openai.Client, conf config, db *Database, messages []openai.ChatMessage, chatID, userID int64, username string, messageID int64) {
 	_ = bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 	model := conf.OpenAIModel
@@ -250,22 +261,34 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 				file,
 				tg.OptionsSendDocument{}.
 					SetReplyToMessageID(messageID).
-					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); !res.Ok {
+					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); res.Ok {
+				// save to database (successful)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), answer, uint(response.Usage.CompletionTokens), true)
+			} else {
 				log.Printf("failed to answer messages '%+v' with '%s' as file: %s", messages, answer, err)
 
 				msg := "Failed to send you the answer as a text file. See the server logs for more information."
 				send(bot, conf, msg, chatID, &messageID)
+
+				// save to database (error)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), err.Error(), 0, false)
 			}
 		} else {
 			if res := bot.SendMessage(
 				chatID,
 				answer,
 				tg.OptionsSendMessage{}.
-					SetReplyToMessageID(messageID)); !res.Ok {
+					SetReplyToMessageID(messageID)); res.Ok {
+				// save to database (successful)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), answer, uint(response.Usage.CompletionTokens), true)
+			} else {
 				log.Printf("failed to answer messages '%+v' with '%s': %s", messages, answer, err)
 
 				msg := "Failed to send you the answer as a text. See the server logs for more information."
 				send(bot, conf, msg, chatID, &messageID)
+
+				// save to database (error)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), err.Error(), 0, false)
 			}
 		}
 	} else {
@@ -273,6 +296,9 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 
 		msg := "Failed to generate an answer from OpenAI. See the server logs for more information."
 		send(bot, conf, msg, chatID, &messageID)
+
+		// save to database (error)
+		savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), 0, err.Error(), 0, false)
 	}
 }
 
@@ -291,7 +317,7 @@ func userName(user *tg.User) string {
 }
 
 // generate user's name from update
-func userNameFromUpdate(update *tg.Update) string {
+func userNameFromUpdate(update tg.Update) string {
 	var user *tg.User
 	if update.HasMessage() {
 		user = update.Message.From
@@ -409,4 +435,35 @@ func readFileContentAtURL(url string) (content []byte, err error) {
 	}
 
 	return content, nil
+}
+
+// convert chat messages to a prompt for logging
+func messagesToPrompt(messages []openai.ChatMessage) string {
+	lines := []string{}
+
+	for _, message := range messages {
+		lines = append(lines, fmt.Sprintf("[%s] %s", message.Role, message.Content))
+	}
+
+	return strings.Join(lines, "\n--------\n")
+}
+
+// save prompt and its result to logs database
+func savePromptAndResult(db *Database, chatID, userID int64, username string, prompt string, promptTokens uint, result string, resultTokens uint, resultSuccessful bool) {
+	if db != nil {
+		if err := db.SavePrompt(Prompt{
+			ChatID:   chatID,
+			UserID:   userID,
+			Username: username,
+			Text:     prompt,
+			Tokens:   promptTokens,
+			Result: Generated{
+				Successful: resultSuccessful,
+				Text:       result,
+				Tokens:     resultTokens,
+			},
+		}); err != nil {
+			log.Printf("failed to save prompt & result to database: %s", err)
+		}
+	}
 }
