@@ -27,12 +27,19 @@ const (
 	cmdStart = "/start"
 	cmdCount = "/count"
 	cmdStats = "/stats"
+	cmdHelp  = "/help"
 
 	msgStart                 = "This bot will answer your messages with ChatGPT API :-)"
 	msgCmdNotSupported       = "Not a supported bot command: %s"
 	msgDatabaseNotConfigured = "Database not configured. Set `db_filepath` in your config file."
 	msgDatabaseEmpty         = "Database is empty."
 	msgTokenCount            = "%d tokens in %d chars (cl100k_base)"
+	msgHelp                  = `Help message here:
+
+/count [some_text] : count the number of tokens in a given text.
+/stats : show stats of this bot.
+/help : show this help message.
+`
 )
 
 // config struct for loading a configuration file
@@ -142,6 +149,8 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database,
 			send(bot, conf, msgStart, chatID, nil)
 		case cmdStats:
 			send(bot, conf, retrieveStats(db), chatID, &messageID)
+		case cmdHelp:
+			send(bot, conf, msgHelp, chatID, &messageID)
 		// TODO: process more bot commands here
 		default:
 			var msg string

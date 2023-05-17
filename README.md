@@ -81,6 +81,10 @@ WantedBy=multi-user.target
 
 and `systemctl` enable|start|restart|stop the service.
 
+## Commands
+
+- `/help` for help message.
+
 ## Todos / Known Issues
 
 - [X] Handle returning messages' size limit (Telegram Bot API's limit: [4096 chars](https://core.telegram.org/bots/api#sendmessage))
