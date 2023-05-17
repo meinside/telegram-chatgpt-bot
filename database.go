@@ -11,12 +11,12 @@ import (
 type Prompt struct {
 	gorm.Model
 
-	ChatID   int64
+	ChatID   int64 `gorm:"index"`
 	UserID   int64
 	Username string
 
 	Text   string
-	Tokens uint
+	Tokens uint `gorm:"index"`
 
 	Result Generated
 }
@@ -25,9 +25,9 @@ type Prompt struct {
 type Generated struct {
 	gorm.Model
 
-	Successful bool
+	Successful bool `gorm:"index"`
 	Text       string
-	Tokens     uint
+	Tokens     uint `gorm:"index"`
 
 	PromptID int64 // foreign key
 }

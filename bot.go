@@ -26,10 +26,13 @@ const (
 
 	cmdStart = "/start"
 	cmdCount = "/count"
+	cmdStats = "/stats"
 
-	msgStart           = "This bot will answer your messages with ChatGPT API :-)"
-	msgCmdNotSupported = "Not a supported bot command: %s"
-	msgTokenCount      = "%d tokens in %d chars (cl100k_base)"
+	msgStart                 = "This bot will answer your messages with ChatGPT API :-)"
+	msgCmdNotSupported       = "Not a supported bot command: %s"
+	msgDatabaseNotConfigured = "Database not configured. Set `db_filepath` in your config file."
+	msgDatabaseEmpty         = "Database is empty."
+	msgTokenCount            = "%d tokens in %d chars (cl100k_base)"
 )
 
 // config struct for loading a configuration file
@@ -137,6 +140,8 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database,
 		switch cmd {
 		case cmdStart:
 			send(bot, conf, msgStart, chatID, nil)
+		case cmdStats:
+			send(bot, conf, retrieveStats(db), chatID, &messageID)
 		// TODO: process more bot commands here
 		default:
 			var msg string
@@ -446,6 +451,46 @@ func messagesToPrompt(messages []openai.ChatMessage) string {
 	}
 
 	return strings.Join(lines, "\n--------\n")
+}
+
+// retrieve stats from database
+func retrieveStats(db *Database) string {
+	if db == nil {
+		return msgDatabaseNotConfigured
+	} else {
+		lines := []string{}
+
+		var prompt Prompt
+		if tx := db.db.First(&prompt); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("Since %s", prompt.CreatedAt.Format("2006-01-02 15:04:05")))
+			lines = append(lines, "")
+		}
+
+		var count int64
+		if tx := db.db.Table("prompts").Select("count(distinct chat_id) as count").Scan(&count); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Chats: %d", count))
+		}
+
+		var sumAndCount struct {
+			Sum   int64
+			Count int64
+		}
+		if tx := db.db.Table("prompts").Select("sum(tokens) as sum, count(id) as count").Where("tokens > 0").Scan(&sumAndCount); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Prompts: %d (Total tokens: %d)", sumAndCount.Count, sumAndCount.Sum))
+		}
+		if tx := db.db.Table("generateds").Select("sum(tokens) as sum, count(id) as count").Where("successful = 1").Scan(&sumAndCount); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Completions: %d (Total tokens: %d)", sumAndCount.Count, sumAndCount.Sum))
+		}
+		if tx := db.db.Table("generateds").Select("count(id) as count").Where("successful = 0").Scan(&count); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Errors: %d", count))
+		}
+
+		if len(lines) > 0 {
+			return strings.Join(lines, "\n")
+		}
+
+		return msgDatabaseEmpty
+	}
 }
 
 // save prompt and its result to logs database

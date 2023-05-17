@@ -1,2 +1,5 @@
 config.json
 telegram-chatgpt-bot
+
+*.db
+*.sqlite*
