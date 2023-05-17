@@ -35,9 +35,12 @@ and set your values:
     "openai_org_id": "org-1234567890abcdefghijk",
     "openai_model": "gpt-3.5-turbo",
     "allowed_telegram_users": ["user1", "user2"],
+    "db_filepath": null,
     "verbose": false
 }
 ```
+
+If `db_filepath` is given, all prompts and their responses will be logged in the SQLite3 file.
 
 ## Build
 
@@ -78,10 +81,14 @@ WantedBy=multi-user.target
 
 and `systemctl` enable|start|restart|stop the service.
 
+## Commands
+
+- `/help` for help message.
+
 ## Todos / Known Issues
 
 - [X] Handle returning messages' size limit (Telegram Bot API's limit: [4096 chars](https://core.telegram.org/bots/api#sendmessage))
-  - Will send a text document instead of ordinary text message.
+  - Will send a text document instead of an ordinary text message.
 
 ## License
 

@@ -26,10 +26,20 @@ const (
 
 	cmdStart = "/start"
 	cmdCount = "/count"
+	cmdStats = "/stats"
+	cmdHelp  = "/help"
 
-	msgStart           = "This bot will answer your messages with ChatGPT API :-)"
-	msgCmdNotSupported = "Not a supported bot command: %s"
-	msgTokenCount      = "%d tokens in %d chars (cl100k_base)"
+	msgStart                 = "This bot will answer your messages with ChatGPT API :-)"
+	msgCmdNotSupported       = "Not a supported bot command: %s"
+	msgDatabaseNotConfigured = "Database not configured. Set `db_filepath` in your config file."
+	msgDatabaseEmpty         = "Database is empty."
+	msgTokenCount            = "%d tokens in %d chars (cl100k_base)"
+	msgHelp                  = `Help message here:
+
+/count [some_text] : count the number of tokens in a given text.
+/stats : show stats of this bot.
+/help : show this help message.
+`
 )
 
 // config struct for loading a configuration file
@@ -41,6 +51,9 @@ type config struct {
 	OpenAIAPIKey         string `json:"openai_api_key"`
 	OpenAIOrganizationID string `json:"openai_org_id"`
 	OpenAIModel          string `json:"openai_model,omitempty"`
+
+	// database logging
+	RequestLogsDBFilepath string `json:"db_filepath,omitempty"`
 
 	// other configurations
 	AllowedTelegramUsers []string `json:"allowed_telegram_users"`
@@ -80,12 +93,20 @@ func runBot(conf config) {
 	if b := bot.GetMe(); b.Ok {
 		log.Printf("launching bot: %s", userName(b.Result))
 
+		var db *Database = nil
+		if conf.RequestLogsDBFilepath != "" {
+			var err error
+			if db, err = OpenDatabase(conf.RequestLogsDBFilepath); err != nil {
+				log.Printf("failed to open request logs db: %s", err)
+			}
+		}
+
 		// poll updates
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
-				handleUpdate(bot, client, conf, update)
+				handleUpdate(bot, client, conf, db, update)
 			} else {
-				log.Printf("not allowed: %s", userNameFromUpdate(&update))
+				log.Printf("not allowed: %s", userNameFromUpdate(update))
 			}
 		})
 	} else {
@@ -110,7 +131,7 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 }
 
 // handle allowed update from telegram bot api
-func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Update) {
+func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database, update tg.Update) {
 	message := usableMessageFromUpdate(update)
 	if message == nil {
 		log.Printf("no usable message from update.")
@@ -126,6 +147,10 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Upd
 		switch cmd {
 		case cmdStart:
 			send(bot, conf, msgStart, chatID, nil)
+		case cmdStats:
+			send(bot, conf, retrieveStats(db), chatID, &messageID)
+		case cmdHelp:
+			send(bot, conf, msgHelp, chatID, &messageID)
 		// TODO: process more bot commands here
 		default:
 			var msg string
@@ -145,7 +170,7 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, update tg.Upd
 	} else {
 		messages := chatMessagesFromUpdate(bot, update)
 		if len(messages) > 0 {
-			answer(bot, client, conf, messages, chatID, userID, messageID)
+			answer(bot, client, conf, db, messages, chatID, userID, userNameFromUpdate(update), messageID)
 		} else {
 			log.Printf("no converted chat messages from update: %+v", update)
 
@@ -213,7 +238,7 @@ func send(bot *tg.Bot, conf config, message string, chatID int64, messageID *int
 }
 
 // generate an answer to given message and send it to the chat
-func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.ChatMessage, chatID, userID, messageID int64) {
+func answer(bot *tg.Bot, client *openai.Client, conf config, db *Database, messages []openai.ChatMessage, chatID, userID int64, username string, messageID int64) {
 	_ = bot.SendChatAction(chatID, tg.ChatActionTyping, nil)
 
 	model := conf.OpenAIModel
@@ -250,22 +275,34 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 				file,
 				tg.OptionsSendDocument{}.
 					SetReplyToMessageID(messageID).
-					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); !res.Ok {
+					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); res.Ok {
+				// save to database (successful)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), answer, uint(response.Usage.CompletionTokens), true)
+			} else {
 				log.Printf("failed to answer messages '%+v' with '%s' as file: %s", messages, answer, err)
 
 				msg := "Failed to send you the answer as a text file. See the server logs for more information."
 				send(bot, conf, msg, chatID, &messageID)
+
+				// save to database (error)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), err.Error(), 0, false)
 			}
 		} else {
 			if res := bot.SendMessage(
 				chatID,
 				answer,
 				tg.OptionsSendMessage{}.
-					SetReplyToMessageID(messageID)); !res.Ok {
+					SetReplyToMessageID(messageID)); res.Ok {
+				// save to database (successful)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), answer, uint(response.Usage.CompletionTokens), true)
+			} else {
 				log.Printf("failed to answer messages '%+v' with '%s': %s", messages, answer, err)
 
 				msg := "Failed to send you the answer as a text. See the server logs for more information."
 				send(bot, conf, msg, chatID, &messageID)
+
+				// save to database (error)
+				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), err.Error(), 0, false)
 			}
 		}
 	} else {
@@ -273,6 +310,9 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, messages []openai.C
 
 		msg := "Failed to generate an answer from OpenAI. See the server logs for more information."
 		send(bot, conf, msg, chatID, &messageID)
+
+		// save to database (error)
+		savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), 0, err.Error(), 0, false)
 	}
 }
 
@@ -291,7 +331,7 @@ func userName(user *tg.User) string {
 }
 
 // generate user's name from update
-func userNameFromUpdate(update *tg.Update) string {
+func userNameFromUpdate(update tg.Update) string {
 	var user *tg.User
 	if update.HasMessage() {
 		user = update.Message.From
@@ -409,4 +449,75 @@ func readFileContentAtURL(url string) (content []byte, err error) {
 	}
 
 	return content, nil
+}
+
+// convert chat messages to a prompt for logging
+func messagesToPrompt(messages []openai.ChatMessage) string {
+	lines := []string{}
+
+	for _, message := range messages {
+		lines = append(lines, fmt.Sprintf("[%s] %s", message.Role, message.Content))
+	}
+
+	return strings.Join(lines, "\n--------\n")
+}
+
+// retrieve stats from database
+func retrieveStats(db *Database) string {
+	if db == nil {
+		return msgDatabaseNotConfigured
+	} else {
+		lines := []string{}
+
+		var prompt Prompt
+		if tx := db.db.First(&prompt); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("Since %s", prompt.CreatedAt.Format("2006-01-02 15:04:05")))
+			lines = append(lines, "")
+		}
+
+		var count int64
+		if tx := db.db.Table("prompts").Select("count(distinct chat_id) as count").Scan(&count); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Chats: %d", count))
+		}
+
+		var sumAndCount struct {
+			Sum   int64
+			Count int64
+		}
+		if tx := db.db.Table("prompts").Select("sum(tokens) as sum, count(id) as count").Where("tokens > 0").Scan(&sumAndCount); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Prompts: %d (Total tokens: %d)", sumAndCount.Count, sumAndCount.Sum))
+		}
+		if tx := db.db.Table("generateds").Select("sum(tokens) as sum, count(id) as count").Where("successful = 1").Scan(&sumAndCount); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Completions: %d (Total tokens: %d)", sumAndCount.Count, sumAndCount.Sum))
+		}
+		if tx := db.db.Table("generateds").Select("count(id) as count").Where("successful = 0").Scan(&count); tx.Error == nil {
+			lines = append(lines, fmt.Sprintf("* Errors: %d", count))
+		}
+
+		if len(lines) > 0 {
+			return strings.Join(lines, "\n")
+		}
+
+		return msgDatabaseEmpty
+	}
+}
+
+// save prompt and its result to logs database
+func savePromptAndResult(db *Database, chatID, userID int64, username string, prompt string, promptTokens uint, result string, resultTokens uint, resultSuccessful bool) {
+	if db != nil {
+		if err := db.SavePrompt(Prompt{
+			ChatID:   chatID,
+			UserID:   userID,
+			Username: username,
+			Text:     prompt,
+			Tokens:   promptTokens,
+			Result: Generated{
+				Successful: resultSuccessful,
+				Text:       result,
+				Tokens:     resultTokens,
+			},
+		}); err != nil {
+			log.Printf("failed to save prompt & result to database: %s", err)
+		}
+	}
 }
