@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -33,12 +34,14 @@ const (
 	msgCmdNotSupported       = "Not a supported bot command: %s"
 	msgDatabaseNotConfigured = "Database not configured. Set `db_filepath` in your config file."
 	msgDatabaseEmpty         = "Database is empty."
-	msgTokenCount            = "%d tokens in %d chars (cl100k_base)"
+	msgTokenCount            = "<b>%d</b> tokens in <b>%d</b> chars <i>(cl100k_base)</i>"
 	msgHelp                  = `Help message here:
 
 /count [some_text] : count the number of tokens in a given text.
 /stats : show stats of this bot.
 /help : show this help message.
+
+<i>version: %s</i>
 `
 )
 
@@ -150,7 +153,7 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database,
 		case cmdStats:
 			send(bot, conf, retrieveStats(db), chatID, &messageID)
 		case cmdHelp:
-			send(bot, conf, msgHelp, chatID, &messageID)
+			send(bot, conf, helpMessage(), chatID, &messageID)
 		// TODO: process more bot commands here
 		default:
 			var msg string
@@ -228,7 +231,8 @@ func send(bot *tg.Bot, conf config, message string, chatID int64, messageID *int
 		log.Printf("[verbose] sending message to chat(%d): '%s'", chatID, message)
 	}
 
-	options := tg.OptionsSendMessage{}
+	options := tg.OptionsSendMessage{}.
+		SetParseMode(tg.ParseModeHTML)
 	if messageID != nil {
 		options.SetReplyToMessageID(*messageID)
 	}
@@ -471,13 +475,13 @@ func retrieveStats(db *Database) string {
 
 		var prompt Prompt
 		if tx := db.db.First(&prompt); tx.Error == nil {
-			lines = append(lines, fmt.Sprintf("Since %s", prompt.CreatedAt.Format("2006-01-02 15:04:05")))
+			lines = append(lines, fmt.Sprintf("Since <i>%s</i>", prompt.CreatedAt.Format("2006-01-02 15:04:05")))
 			lines = append(lines, "")
 		}
 
 		var count int64
 		if tx := db.db.Table("prompts").Select("count(distinct chat_id) as count").Scan(&count); tx.Error == nil {
-			lines = append(lines, fmt.Sprintf("* Chats: %d", count))
+			lines = append(lines, fmt.Sprintf("* Chats: <b>%d</b>", count))
 		}
 
 		var sumAndCount struct {
@@ -485,13 +489,13 @@ func retrieveStats(db *Database) string {
 			Count int64
 		}
 		if tx := db.db.Table("prompts").Select("sum(tokens) as sum, count(id) as count").Where("tokens > 0").Scan(&sumAndCount); tx.Error == nil {
-			lines = append(lines, fmt.Sprintf("* Prompts: %d (Total tokens: %d)", sumAndCount.Count, sumAndCount.Sum))
+			lines = append(lines, fmt.Sprintf("* Prompts: <b>%d</b> (Total tokens: <b>%d</b>)", sumAndCount.Count, sumAndCount.Sum))
 		}
 		if tx := db.db.Table("generateds").Select("sum(tokens) as sum, count(id) as count").Where("successful = 1").Scan(&sumAndCount); tx.Error == nil {
-			lines = append(lines, fmt.Sprintf("* Completions: %d (Total tokens: %d)", sumAndCount.Count, sumAndCount.Sum))
+			lines = append(lines, fmt.Sprintf("* Completions: <b>%d</b> (Total tokens: <b>%d</b>)", sumAndCount.Count, sumAndCount.Sum))
 		}
 		if tx := db.db.Table("generateds").Select("count(id) as count").Where("successful = 0").Scan(&count); tx.Error == nil {
-			lines = append(lines, fmt.Sprintf("* Errors: %d", count))
+			lines = append(lines, fmt.Sprintf("* Errors: <b>%d</b>", count))
 		}
 
 		if len(lines) > 0 {
@@ -520,4 +524,35 @@ func savePromptAndResult(db *Database, chatID, userID int64, username string, pr
 			log.Printf("failed to save prompt & result to database: %s", err)
 		}
 	}
+}
+
+// generate a help message with version info
+func helpMessage() string {
+	var version string
+
+	if buildInfo, success := debug.ReadBuildInfo(); success {
+		settings := []string{buildInfo.Main.Version}
+
+		for _, kv := range buildInfo.Settings {
+			switch kv.Key {
+			case "vcs.revision":
+				revision := kv.Value
+				settings = append(settings, revision[:6])
+			case "vcs.time":
+				lastCommit, _ := time.Parse(time.RFC3339, kv.Value)
+				settings = append(settings, lastCommit.Format("20060102_150405"))
+			case "vcs.modified":
+				dirtyBuild := kv.Value == "true"
+				if dirtyBuild {
+					settings = append(settings, "(modified)")
+				}
+			}
+		}
+
+		version = strings.Join(settings, "-")
+	} else {
+		version = "unknown"
+	}
+
+	return fmt.Sprintf(msgHelp, version)
 }
