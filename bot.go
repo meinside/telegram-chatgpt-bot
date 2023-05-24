@@ -9,13 +9,13 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
 	"github.com/meinside/geektoken"
 	"github.com/meinside/openai-go"
 	tg "github.com/meinside/telegram-bot-go"
+	"github.com/meinside/version-go"
 )
 
 const (
@@ -528,31 +528,5 @@ func savePromptAndResult(db *Database, chatID, userID int64, username string, pr
 
 // generate a help message with version info
 func helpMessage() string {
-	var version string
-
-	if buildInfo, success := debug.ReadBuildInfo(); success {
-		settings := []string{buildInfo.Main.Version}
-
-		for _, kv := range buildInfo.Settings {
-			switch kv.Key {
-			case "vcs.revision":
-				revision := kv.Value
-				settings = append(settings, revision[:6])
-			case "vcs.time":
-				lastCommit, _ := time.Parse(time.RFC3339, kv.Value)
-				settings = append(settings, lastCommit.Format("20060102_150405"))
-			case "vcs.modified":
-				dirtyBuild := kv.Value == "true"
-				if dirtyBuild {
-					settings = append(settings, "(modified)")
-				}
-			}
-		}
-
-		version = strings.Join(settings, "-")
-	} else {
-		version = "unknown"
-	}
-
-	return fmt.Sprintf(msgHelp, version)
+	return fmt.Sprintf(msgHelp, version.Build(version.OS|version.Architecture|version.Revision))
 }

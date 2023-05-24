@@ -6,6 +6,7 @@ require (
 	github.com/meinside/geektoken v0.0.1
 	github.com/meinside/openai-go v0.1.0
 	github.com/meinside/telegram-bot-go v0.8.6
+	github.com/meinside/version-go v0.0.1
 	gorm.io/driver/sqlite v1.5.1
 	gorm.io/gorm v1.25.1
 )
