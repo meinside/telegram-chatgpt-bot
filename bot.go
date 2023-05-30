@@ -105,19 +105,20 @@ func runBot(conf config) {
 		}
 
 		// set command handlers
-		bot.AddCommandHandler(cmdStart, startCommandHandler(conf))
-		bot.AddCommandHandler(cmdStats, statsCommandHandler(conf, db))
-		bot.AddCommandHandler(cmdHelp, helpCommandHandler(conf))
-		bot.AddCommandHandler(cmdCount, countCommandHandler(conf))
-		bot.SetNoMatchingCommandHandler(noSuchCommandHandler(conf))
+		bot.AddCommandHandler(cmdStart, startCommandHandler(conf, allowedUsers))
+		bot.AddCommandHandler(cmdStats, statsCommandHandler(conf, db, allowedUsers))
+		bot.AddCommandHandler(cmdHelp, helpCommandHandler(conf, allowedUsers))
+		bot.AddCommandHandler(cmdCount, countCommandHandler(conf, allowedUsers))
+		bot.SetNoMatchingCommandHandler(noSuchCommandHandler(conf, allowedUsers))
 
 		// poll updates
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
-			if isAllowed(update, allowedUsers) {
-				handleMessage(bot, client, conf, db, update)
-			} else {
+			if !isAllowed(update, allowedUsers) {
 				log.Printf("not allowed: %s", userNameFromUpdate(update))
+				return
 			}
+
+			handleMessage(bot, client, conf, db, update)
 		})
 	} else {
 		log.Printf("failed to get bot info: %s", *b.Description)
@@ -512,8 +513,13 @@ func helpMessage() string {
 }
 
 // return a /start command handler
-func startCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args string) {
+func startCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, _ string) {
+		if !isAllowed(update, allowedUsers) {
+			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			return
+		}
+
 		message := usableMessageFromUpdate(update)
 		if message == nil {
 			log.Printf("no usable message from update.")
@@ -527,8 +533,13 @@ func startCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args str
 }
 
 // return a /stats command handler
-func statsCommandHandler(conf config, db *Database) func(b *tg.Bot, update tg.Update, args string) {
+func statsCommandHandler(conf config, db *Database, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, args string) {
+		if !isAllowed(update, allowedUsers) {
+			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			return
+		}
+
 		message := usableMessageFromUpdate(update)
 		if message == nil {
 			log.Printf("no usable message from update.")
@@ -543,8 +554,13 @@ func statsCommandHandler(conf config, db *Database) func(b *tg.Bot, update tg.Up
 }
 
 // return a /help command handler
-func helpCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args string) {
+func helpCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, _ string) {
+		if !isAllowed(update, allowedUsers) {
+			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			return
+		}
+
 		message := usableMessageFromUpdate(update)
 		if message == nil {
 			log.Printf("no usable message from update.")
@@ -559,8 +575,13 @@ func helpCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args stri
 }
 
 // return a /count command handler
-func countCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args string) {
+func countCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, args string) {
+		if !isAllowed(update, allowedUsers) {
+			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			return
+		}
+
 		message := usableMessageFromUpdate(update)
 		if message == nil {
 			log.Printf("no usable message from update.")
@@ -582,8 +603,13 @@ func countCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args str
 }
 
 // return a 'no such command' handler
-func noSuchCommandHandler(conf config) func(b *tg.Bot, update tg.Update, cmd, args string) {
+func noSuchCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, cmd, args string) {
 	return func(b *tg.Bot, update tg.Update, cmd, args string) {
+		if !isAllowed(update, allowedUsers) {
+			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			return
+		}
+
 		message := usableMessageFromUpdate(update)
 		if message == nil {
 			log.Printf("no usable message from update.")
