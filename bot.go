@@ -104,10 +104,17 @@ func runBot(conf config) {
 			}
 		}
 
+		// set command handlers
+		bot.AddCommandHandler(cmdStart, startCommandHandler(conf))
+		bot.AddCommandHandler(cmdStats, statsCommandHandler(conf, db))
+		bot.AddCommandHandler(cmdHelp, helpCommandHandler(conf))
+		bot.AddCommandHandler(cmdCount, countCommandHandler(conf))
+		bot.SetNoMatchingCommandHandler(noSuchCommandHandler(conf))
+
 		// poll updates
 		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if isAllowed(update, allowedUsers) {
-				handleUpdate(bot, client, conf, db, update)
+				handleMessage(bot, client, conf, db, update)
 			} else {
 				log.Printf("not allowed: %s", userNameFromUpdate(update))
 			}
@@ -133,8 +140,8 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 	return false
 }
 
-// handle allowed update from telegram bot api
-func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database, update tg.Update) {
+// handle allowed message update from telegram bot api
+func handleMessage(bot *tg.Bot, client *openai.Client, conf config, db *Database, update tg.Update) {
 	message := usableMessageFromUpdate(update)
 	if message == nil {
 		log.Printf("no usable message from update.")
@@ -145,41 +152,14 @@ func handleUpdate(bot *tg.Bot, client *openai.Client, conf config, db *Database,
 	userID := message.From.ID
 	messageID := message.MessageID
 
-	if message.HasText() && strings.HasPrefix(*message.Text, "/") {
-		cmd := *message.Text
-		switch cmd {
-		case cmdStart:
-			send(bot, conf, msgStart, chatID, nil)
-		case cmdStats:
-			send(bot, conf, retrieveStats(db), chatID, &messageID)
-		case cmdHelp:
-			send(bot, conf, helpMessage(), chatID, &messageID)
-		// TODO: process more bot commands here
-		default:
-			var msg string
-			if strings.HasPrefix(cmd, cmdCount) {
-				txtToCount := strings.TrimSpace(strings.Replace(cmd, cmdCount, "", 1))
-				if count, err := countTokens(txtToCount); err == nil {
-					msg = fmt.Sprintf(msgTokenCount, count, len(txtToCount))
-				} else {
-					msg = err.Error()
-				}
-			} else {
-				msg = fmt.Sprintf(msgCmdNotSupported, cmd)
-			}
-			send(bot, conf, msg, chatID, &messageID)
-			return
-		}
+	messages := chatMessagesFromUpdate(bot, update)
+	if len(messages) > 0 {
+		answer(bot, client, conf, db, messages, chatID, userID, userNameFromUpdate(update), messageID)
 	} else {
-		messages := chatMessagesFromUpdate(bot, update)
-		if len(messages) > 0 {
-			answer(bot, client, conf, db, messages, chatID, userID, userNameFromUpdate(update), messageID)
-		} else {
-			log.Printf("no converted chat messages from update: %+v", update)
+		log.Printf("no converted chat messages from update: %+v", update)
 
-			msg := "Failed to get usable chat messages from your input. See the server logs for more information."
-			send(bot, conf, msg, chatID, &messageID)
-		}
+		msg := "Failed to get usable chat messages from your input. See the server logs for more information."
+		send(bot, conf, msg, chatID, &messageID)
 	}
 }
 
@@ -529,4 +509,91 @@ func savePromptAndResult(db *Database, chatID, userID int64, username string, pr
 // generate a help message with version info
 func helpMessage() string {
 	return fmt.Sprintf(msgHelp, version.Build(version.OS|version.Architecture|version.Revision))
+}
+
+// return a /start command handler
+func startCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args string) {
+	return func(b *tg.Bot, update tg.Update, _ string) {
+		message := usableMessageFromUpdate(update)
+		if message == nil {
+			log.Printf("no usable message from update.")
+			return
+		}
+
+		chatID := message.Chat.ID
+
+		send(b, conf, msgStart, chatID, nil)
+	}
+}
+
+// return a /stats command handler
+func statsCommandHandler(conf config, db *Database) func(b *tg.Bot, update tg.Update, args string) {
+	return func(b *tg.Bot, update tg.Update, args string) {
+		message := usableMessageFromUpdate(update)
+		if message == nil {
+			log.Printf("no usable message from update.")
+			return
+		}
+
+		chatID := message.Chat.ID
+		messageID := message.MessageID
+
+		send(b, conf, retrieveStats(db), chatID, &messageID)
+	}
+}
+
+// return a /help command handler
+func helpCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args string) {
+	return func(b *tg.Bot, update tg.Update, _ string) {
+		message := usableMessageFromUpdate(update)
+		if message == nil {
+			log.Printf("no usable message from update.")
+			return
+		}
+
+		chatID := message.Chat.ID
+		messageID := message.MessageID
+
+		send(b, conf, helpMessage(), chatID, &messageID)
+	}
+}
+
+// return a /count command handler
+func countCommandHandler(conf config) func(b *tg.Bot, update tg.Update, args string) {
+	return func(b *tg.Bot, update tg.Update, args string) {
+		message := usableMessageFromUpdate(update)
+		if message == nil {
+			log.Printf("no usable message from update.")
+			return
+		}
+
+		chatID := message.Chat.ID
+		messageID := message.MessageID
+
+		var msg string
+		if count, err := countTokens(args); err == nil {
+			msg = fmt.Sprintf(msgTokenCount, count, len(args))
+		} else {
+			msg = err.Error()
+		}
+
+		send(b, conf, msg, chatID, &messageID)
+	}
+}
+
+// return a 'no such command' handler
+func noSuchCommandHandler(conf config) func(b *tg.Bot, update tg.Update, cmd, args string) {
+	return func(b *tg.Bot, update tg.Update, cmd, args string) {
+		message := usableMessageFromUpdate(update)
+		if message == nil {
+			log.Printf("no usable message from update.")
+			return
+		}
+
+		chatID := message.Chat.ID
+		messageID := message.MessageID
+
+		msg := fmt.Sprintf(msgCmdNotSupported, cmd)
+		send(b, conf, msg, chatID, &messageID)
+	}
 }

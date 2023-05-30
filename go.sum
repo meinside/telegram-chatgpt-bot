@@ -10,8 +10,8 @@ github.com/meinside/geektoken v0.0.1 h1:KyVZwSsl6yD6UzaWfR8G48S64IhS+HNaKEHzMLKj
 github.com/meinside/geektoken v0.0.1/go.mod h1:fcHibWofTfmj/ZgdWRMyWvt8FtmrD4mB8hCFKiF133c=
 github.com/meinside/openai-go v0.1.0 h1:VNTo3tEnxwMRtsPLWhXelyfjG08g1cbxI5KMCP6xuSw=
 github.com/meinside/openai-go v0.1.0/go.mod h1:dgAFcjVzLjIwKgjSycPHjkml63gBRi4b/k7BskxaNaI=
-github.com/meinside/telegram-bot-go v0.8.6 h1:ySYab7R0Jx5f9saZ9pVSgw30QorwEc2DWjcGzWPFCTQ=
-github.com/meinside/telegram-bot-go v0.8.6/go.mod h1:RzR/y1i7pjalRtwD1vBg8wtkqWR+TI6wwnkTpOy7UJM=
+github.com/meinside/telegram-bot-go v0.9.1 h1:OUkGlYEOMcy4UxeumjUpZMH+ZQ5gZfS3hI4KoT1ewzo=
+github.com/meinside/telegram-bot-go v0.9.1/go.mod h1:RzR/y1i7pjalRtwD1vBg8wtkqWR+TI6wwnkTpOy7UJM=
 github.com/meinside/version-go v0.0.1 h1:LOEK96dltfVB+m2RIVRC0aT826gm9qbAzdeKv3C1r7E=
 github.com/meinside/version-go v0.0.1/go.mod h1:mFvlwbro1E126u4rU727CcHNa8OPFyhq+KDYYNysFj4=
 gorm.io/driver/sqlite v1.5.1 h1:hYyrLkAWE71bcarJDPdZNTLWtr8XrSjOWyjUYI6xdL4=
