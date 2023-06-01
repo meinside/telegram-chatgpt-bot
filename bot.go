@@ -32,6 +32,7 @@ const (
 
 	msgStart                 = "This bot will answer your messages with ChatGPT API :-)"
 	msgCmdNotSupported       = "Not a supported bot command: %s"
+	msgTypeNotSupported      = "Not a supported message type."
 	msgDatabaseNotConfigured = "Database not configured. Set `db_filepath` in your config file."
 	msgDatabaseEmpty         = "Database is empty."
 	msgTokenCount            = "<b>%d</b> tokens in <b>%d</b> chars <i>(cl100k_base)</i>"
@@ -104,6 +105,16 @@ func runBot(conf config) {
 			}
 		}
 
+		// set message handler
+		bot.SetMessageHandler(func(b *tg.Bot, update tg.Update, message tg.Message, edited bool) {
+			if !isAllowed(update, allowedUsers) {
+				log.Printf("message not allowed: %s", userNameFromUpdate(update))
+				return
+			}
+
+			handleMessage(b, client, conf, db, update, message)
+		})
+
 		// set command handlers
 		bot.AddCommandHandler(cmdStart, startCommandHandler(conf, allowedUsers))
 		bot.AddCommandHandler(cmdStats, statsCommandHandler(conf, db, allowedUsers))
@@ -118,7 +129,11 @@ func runBot(conf config) {
 				return
 			}
 
-			handleMessage(bot, client, conf, db, update)
+			// type not supported
+			message := usableMessageFromUpdate(update)
+			if message != nil {
+				send(b, conf, msgTypeNotSupported, message.Chat.ID, &message.MessageID)
+			}
 		})
 	} else {
 		log.Printf("failed to get bot info: %s", *b.Description)
@@ -142,18 +157,12 @@ func isAllowed(update tg.Update, allowedUsers map[string]bool) bool {
 }
 
 // handle allowed message update from telegram bot api
-func handleMessage(bot *tg.Bot, client *openai.Client, conf config, db *Database, update tg.Update) {
-	message := usableMessageFromUpdate(update)
-	if message == nil {
-		log.Printf("no usable message from update.")
-		return
-	}
-
+func handleMessage(bot *tg.Bot, client *openai.Client, conf config, db *Database, update tg.Update, message tg.Message) {
 	chatID := message.Chat.ID
 	userID := message.From.ID
 	messageID := message.MessageID
 
-	messages := chatMessagesFromUpdate(bot, update)
+	messages := chatMessagesFromTGMessage(bot, message)
 	if len(messages) > 0 {
 		answer(bot, client, conf, db, messages, chatID, userID, userNameFromUpdate(update), messageID)
 	} else {
@@ -177,21 +186,15 @@ func usableMessageFromUpdate(update tg.Update) (message *tg.Message) {
 	return message
 }
 
-// convert telegram bot update into openai chat messages
-func chatMessagesFromUpdate(bot *tg.Bot, update tg.Update) (chatMessages []openai.ChatMessage) {
+// convert telegram bot message into openai chat messages
+func chatMessagesFromTGMessage(bot *tg.Bot, message tg.Message) (chatMessages []openai.ChatMessage) {
 	chatMessages = []openai.ChatMessage{}
 
-	var message *tg.Message
-	if update.HasMessage() {
-		message = update.Message
-	} else if update.HasEditedMessage() {
-		message = update.EditedMessage
-	}
 	replyTo := repliedToMessage(message)
 
 	// chat message 1
 	if replyTo != nil {
-		if chatMessage := convertMessage(bot, replyTo); chatMessage != nil {
+		if chatMessage := convertMessage(bot, *replyTo); chatMessage != nil {
 			chatMessages = append(chatMessages, *chatMessage)
 		}
 	}
@@ -328,7 +331,7 @@ func userNameFromUpdate(update tg.Update) string {
 }
 
 // get original message which was replied by given `message`
-func repliedToMessage(message *tg.Message) *tg.Message {
+func repliedToMessage(message tg.Message) *tg.Message {
 	if message.ReplyToMessage != nil {
 		return message.ReplyToMessage
 	}
@@ -340,7 +343,7 @@ func repliedToMessage(message *tg.Message) *tg.Message {
 // nil if there was any error.
 //
 // (if it was sent from bot, make it an assistant's message)
-func convertMessage(bot *tg.Bot, message *tg.Message) *openai.ChatMessage {
+func convertMessage(bot *tg.Bot, message tg.Message) *openai.ChatMessage {
 	if message.ViaBot != nil &&
 		message.ViaBot.IsBot {
 		if message.HasText() {
@@ -516,7 +519,7 @@ func helpMessage() string {
 func startCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, _ string) {
 		if !isAllowed(update, allowedUsers) {
-			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			log.Printf("start command not allowed: %s", userNameFromUpdate(update))
 			return
 		}
 
@@ -536,7 +539,7 @@ func startCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.B
 func statsCommandHandler(conf config, db *Database, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, args string) {
 		if !isAllowed(update, allowedUsers) {
-			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			log.Printf("stats command not allowed: %s", userNameFromUpdate(update))
 			return
 		}
 
@@ -557,7 +560,7 @@ func statsCommandHandler(conf config, db *Database, allowedUsers map[string]bool
 func helpCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, _ string) {
 		if !isAllowed(update, allowedUsers) {
-			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			log.Printf("help command not allowed: %s", userNameFromUpdate(update))
 			return
 		}
 
@@ -578,7 +581,7 @@ func helpCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bo
 func countCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, args string) {
 	return func(b *tg.Bot, update tg.Update, args string) {
 		if !isAllowed(update, allowedUsers) {
-			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			log.Printf("count command not allowed: %s", userNameFromUpdate(update))
 			return
 		}
 
@@ -606,7 +609,7 @@ func countCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.B
 func noSuchCommandHandler(conf config, allowedUsers map[string]bool) func(b *tg.Bot, update tg.Update, cmd, args string) {
 	return func(b *tg.Bot, update tg.Update, cmd, args string) {
 		if !isAllowed(update, allowedUsers) {
-			log.Printf("not allowed: %s", userNameFromUpdate(update))
+			log.Printf("command not allowed: %s", userNameFromUpdate(update))
 			return
 		}
 
