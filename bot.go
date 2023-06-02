@@ -123,7 +123,7 @@ func runBot(conf config) {
 		bot.SetNoMatchingCommandHandler(noSuchCommandHandler(conf, allowedUsers))
 
 		// poll updates
-		bot.StartMonitoringUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
+		bot.StartPollingUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
 			if !isAllowed(update, allowedUsers) {
 				log.Printf("not allowed: %s", userNameFromUpdate(update))
 				return
