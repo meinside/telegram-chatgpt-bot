@@ -446,7 +446,9 @@ func messagesToPrompt(messages []openai.ChatMessage) string {
 	lines := []string{}
 
 	for _, message := range messages {
-		lines = append(lines, fmt.Sprintf("[%s] %s", message.Role, message.Content))
+		if message.Content != nil {
+			lines = append(lines, fmt.Sprintf("[%s] %s", message.Role, *message.Content))
+		}
 	}
 
 	return strings.Join(lines, "\n--------\n")
