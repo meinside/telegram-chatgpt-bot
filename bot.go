@@ -246,7 +246,9 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, db *Database, messa
 
 		var answer string
 		if len(response.Choices) > 0 {
-			answer = response.Choices[0].Message.Content
+			if response.Choices[0].Message.Content != nil {
+				answer = *response.Choices[0].Message.Content
+			}
 		} else {
 			answer = "There was no response from OpenAI API."
 		}
