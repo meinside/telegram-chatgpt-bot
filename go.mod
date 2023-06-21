@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/meinside/geektoken v0.0.1
-	github.com/meinside/openai-go v0.2.0
+	github.com/meinside/openai-go v0.2.1
 	github.com/meinside/telegram-bot-go v0.9.7
 	github.com/meinside/version-go v0.0.2
 	gorm.io/driver/sqlite v1.5.2
