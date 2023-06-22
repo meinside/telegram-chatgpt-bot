@@ -12,6 +12,8 @@ github.com/meinside/openai-go v0.2.0 h1:6zXsuFRosn70qWyKxDiBNnCyZvklhix3Lvl0y0em
 github.com/meinside/openai-go v0.2.0/go.mod h1:dgAFcjVzLjIwKgjSycPHjkml63gBRi4b/k7BskxaNaI=
 github.com/meinside/openai-go v0.2.1 h1:8HV7iVCyTvg8KvNsuYuK2AQitglgFg03KmPiMAstvfc=
 github.com/meinside/openai-go v0.2.1/go.mod h1:dgAFcjVzLjIwKgjSycPHjkml63gBRi4b/k7BskxaNaI=
+github.com/meinside/openai-go v0.2.2 h1:+EpMqhW0p82VbWj0EnTB7gk6z5HtsupyWVSU64/0m1o=
+github.com/meinside/openai-go v0.2.2/go.mod h1:dgAFcjVzLjIwKgjSycPHjkml63gBRi4b/k7BskxaNaI=
 github.com/meinside/telegram-bot-go v0.9.7 h1:f5EOUGEMkVgb4k+nfYvM5dGLwwFJv5ckvee96uMEfuM=
 github.com/meinside/telegram-bot-go v0.9.7/go.mod h1:RzR/y1i7pjalRtwD1vBg8wtkqWR+TI6wwnkTpOy7UJM=
 github.com/meinside/version-go v0.0.2 h1:No8xR94DxOhnrp49M/RSbQ/eWTt1GcncmrJdk1nHtiM=
