@@ -124,15 +124,19 @@ func runBot(conf config) {
 
 		// poll updates
 		bot.StartPollingUpdates(0, intervalSeconds, func(b *tg.Bot, update tg.Update, err error) {
-			if !isAllowed(update, allowedUsers) {
-				log.Printf("not allowed: %s", userNameFromUpdate(update))
-				return
-			}
+			if err == nil {
+				if !isAllowed(update, allowedUsers) {
+					log.Printf("not allowed: %s", userNameFromUpdate(update))
+					return
+				}
 
-			// type not supported
-			message := usableMessageFromUpdate(update)
-			if message != nil {
-				send(b, conf, msgTypeNotSupported, message.Chat.ID, &message.MessageID)
+				// type not supported
+				message := usableMessageFromUpdate(update)
+				if message != nil {
+					send(b, conf, msgTypeNotSupported, message.Chat.ID, &message.MessageID)
+				}
+			} else {
+				log.Printf("failed to poll updates: %s", err)
 			}
 		})
 	} else {
