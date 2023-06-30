@@ -322,14 +322,11 @@ func userName(user *tg.User) string {
 
 // generate user's name from update
 func userNameFromUpdate(update tg.Update) string {
-	var user *tg.User
-	if update.HasMessage() {
-		user = update.Message.From
-	} else if update.HasEditedMessage() {
-		user = update.EditedMessage.From
+	if from := update.GetFrom(); from != nil {
+		return userName(from)
+	} else {
+		return "unknown"
 	}
-
-	return userName(user)
 }
 
 // get original message which was replied by given `message`
