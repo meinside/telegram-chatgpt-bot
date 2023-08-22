@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/meinside/geektoken"
+	"github.com/meinside/infisical-go"
+	"github.com/meinside/infisical-go/helper"
 	"github.com/meinside/openai-go"
 	tg "github.com/meinside/telegram-bot-go"
 	"github.com/meinside/version-go"
@@ -48,20 +50,32 @@ const (
 
 // config struct for loading a configuration file
 type config struct {
-	// telegram bot api
-	TelegramBotToken string `json:"telegram_bot_token"`
+	// configurations
+	AllowedTelegramUsers  []string `json:"allowed_telegram_users"`
+	OpenAIModel           string   `json:"openai_model,omitempty"`
+	RequestLogsDBFilepath string   `json:"db_filepath,omitempty"`
+	Verbose               bool     `json:"verbose,omitempty"`
 
-	// openai api
-	OpenAIAPIKey         string `json:"openai_api_key"`
-	OpenAIOrganizationID string `json:"openai_org_id"`
-	OpenAIModel          string `json:"openai_model,omitempty"`
+	// telegram bot and openai api tokens
+	TelegramBotToken     string `json:"telegram_bot_token,omitempty"`
+	OpenAIAPIKey         string `json:"openai_api_key,omitempty"`
+	OpenAIOrganizationID string `json:"openai_org_id,omitempty"`
 
-	// database logging
-	RequestLogsDBFilepath string `json:"db_filepath,omitempty"`
+	// or Infisical settings
+	Infisical *struct {
+		// NOTE: When the workspace's E2EE setting is enabled, APIKey is essential for decryption
+		E2EE   bool    `json:"e2ee,omitempty"`
+		APIKey *string `json:"api_key,omitempty"`
 
-	// other configurations
-	AllowedTelegramUsers []string `json:"allowed_telegram_users"`
-	Verbose              bool     `json:"verbose,omitempty"`
+		WorkspaceID string               `json:"workspace_id"`
+		Token       string               `json:"token"`
+		Environment string               `json:"environment"`
+		SecretType  infisical.SecretType `json:"secret_type"`
+
+		TelegramBotTokenKeyPath     string `json:"telegram_bot_token_key_path"`
+		OpenAIAPIKeyKeyPath         string `json:"openai_api_key_key_path"`
+		OpenAIOrganizationIDKeyPath string `json:"openai_org_id_key_path"`
+	} `json:"infisical,omitempty"`
 }
 
 // load config at given path
@@ -69,11 +83,53 @@ func loadConfig(fpath string) (conf config, err error) {
 	var bytes []byte
 	if bytes, err = os.ReadFile(fpath); err == nil {
 		if err = json.Unmarshal(bytes, &conf); err == nil {
-			return conf, nil
+			if (conf.TelegramBotToken == "" || conf.OpenAIAPIKey == "" || conf.OpenAIOrganizationID == "") && conf.Infisical != nil {
+				// read token and api key from infisical
+				var botToken, apiKey, orgID string
+
+				var kvs map[string]string
+				if conf.Infisical.E2EE && conf.Infisical.APIKey != nil {
+					kvs, err = helper.E2EEValues(
+						*conf.Infisical.APIKey,
+						conf.Infisical.WorkspaceID,
+						conf.Infisical.Token,
+						conf.Infisical.Environment,
+						conf.Infisical.SecretType,
+						[]string{
+							conf.Infisical.TelegramBotTokenKeyPath,
+							conf.Infisical.OpenAIAPIKeyKeyPath,
+							conf.Infisical.OpenAIOrganizationIDKeyPath,
+						},
+					)
+				} else {
+					kvs, err = helper.Values(
+						conf.Infisical.WorkspaceID,
+						conf.Infisical.Token,
+						conf.Infisical.Environment,
+						conf.Infisical.SecretType,
+						[]string{
+							conf.Infisical.TelegramBotTokenKeyPath,
+							conf.Infisical.OpenAIAPIKeyKeyPath,
+							conf.Infisical.OpenAIOrganizationIDKeyPath,
+						},
+					)
+				}
+
+				var exists bool
+				if botToken, exists = kvs[conf.Infisical.TelegramBotTokenKeyPath]; exists {
+					conf.TelegramBotToken = botToken
+				}
+				if apiKey, exists = kvs[conf.Infisical.OpenAIAPIKeyKeyPath]; exists {
+					conf.OpenAIAPIKey = apiKey
+				}
+				if orgID, exists = kvs[conf.Infisical.OpenAIOrganizationIDKeyPath]; exists {
+					conf.OpenAIOrganizationID = orgID
+				}
+			}
 		}
 	}
 
-	return config{}, err
+	return conf, err
 }
 
 // launch bot with given parameters
