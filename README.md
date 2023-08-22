@@ -30,17 +30,68 @@ and set your values:
 
 ```json
 {
-    "telegram_bot_token": "123456:abcdefghijklmnop-QRSTUVWXYZ7890",
-    "openai_api_key": "key-ABCDEFGHIJK1234567890",
-    "openai_org_id": "org-1234567890abcdefghijk",
-    "openai_model": "gpt-3.5-turbo",
-    "allowed_telegram_users": ["user1", "user2"],
-    "db_filepath": null,
-    "verbose": false
+  "allowed_telegram_users": ["user1", "user2"],
+  "openai_model": "gpt-3.5-turbo",
+  "db_filepath": null,
+  "verbose": false,
+
+  "telegram_bot_token": "123456:abcdefghijklmnop-QRSTUVWXYZ7890",
+  "openai_api_key": "key-ABCDEFGHIJK1234567890",
+  "openai_org_id": "org-1234567890abcdefghijk"
 }
 ```
 
 If `db_filepath` is given, all prompts and their responses will be logged in the SQLite3 file.
+
+### Using Infisical
+
+You can use [Infisical](https://infisical.com/) for retrieving your bot token and api key:
+
+```json
+{
+  "allowed_telegram_users": ["user1", "user2"],
+  "openai_model": "gpt-3.5-turbo",
+  "db_filepath": null,
+  "verbose": false,
+
+  "infisical": {
+    "workspace_id": "012345abcdefg",
+    "token": "st.xyzwabcd.0987654321.abcdefghijklmnop",
+    "environment": "dev",
+    "secret_type": "shared",
+
+    "telegram_bot_token_key_path": "/path/to/your/KEY_TO_CHATGPT_BOT_TOKEN",
+    "openai_api_key_key_path": "/path/to/your/KEY_TO_OPENAI_API_KEY",
+    "openai_org_id_key_path": "/path/to/your/KEY_TO_OPENAI_ORG_ID"
+  }
+}
+```
+
+If your Infisical workspace's E2EE setting is enabled, you also need to provide your API key:
+
+```json
+{
+  "allowed_telegram_users": ["user1", "user2"],
+  "openai_model": "gpt-3.5-turbo",
+  "db_filepath": null,
+  "verbose": false,
+
+  "infisical": {
+    "e2ee": true,
+    "api_key": "ak.1234567890.abcdefghijk",
+
+    "workspace_id": "012345abcdefg",
+    "token": "st.xyzwabcd.0987654321.abcdefghijklmnop",
+    "environment": "dev",
+    "secret_type": "shared",
+
+    "telegram_bot_token_key_path": "/path/to/your/KEY_TO_CHATGPT_BOT_TOKEN",
+    "openai_api_key_key_path": "/path/to/your/KEY_TO_OPENAI_API_KEY",
+    "openai_org_id_key_path": "/path/to/your/KEY_TO_OPENAI_ORG_ID"
+  }
+}
+```
+
 
 ## Build
 

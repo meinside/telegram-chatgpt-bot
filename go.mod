@@ -1,14 +1,15 @@
 module github.com/meinside/telegram-chatgpt-bot
 
-go 1.20
+go 1.21.0
 
 require (
 	github.com/meinside/geektoken v0.0.1
+	github.com/meinside/infisical-go v0.0.12
 	github.com/meinside/openai-go v0.2.2
-	github.com/meinside/telegram-bot-go v0.9.7
+	github.com/meinside/telegram-bot-go v0.9.9
 	github.com/meinside/version-go v0.0.2
-	gorm.io/driver/sqlite v1.5.2
-	gorm.io/gorm v1.25.2
+	gorm.io/driver/sqlite v1.5.3
+	gorm.io/gorm v1.25.4
 )
 
 require (
