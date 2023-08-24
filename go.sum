@@ -8,8 +8,8 @@ github.com/mattn/go-sqlite3 v1.14.17 h1:mCRHCLDUBXgpKAqIKsaAaAsrAlbkeomtRFKXh2L6
 github.com/mattn/go-sqlite3 v1.14.17/go.mod h1:2eHXhiwb8IkHr+BDWZGa96P6+rkvnG63S2DGjv9HUNg=
 github.com/meinside/geektoken v0.0.1 h1:KyVZwSsl6yD6UzaWfR8G48S64IhS+HNaKEHzMLKjhJ4=
 github.com/meinside/geektoken v0.0.1/go.mod h1:fcHibWofTfmj/ZgdWRMyWvt8FtmrD4mB8hCFKiF133c=
-github.com/meinside/infisical-go v0.0.13 h1:HwaamCii8bgt4dzxqTM7P9okH0S62FT0hLNAY7FEZm0=
-github.com/meinside/infisical-go v0.0.13/go.mod h1:cfQHaBT5VIzQISkrmJj/AUkyxGMoTBy8ENNEL0TJ02E=
+github.com/meinside/infisical-go v0.0.18 h1:7vTzMYJc6e1pKmgwrsfPfYFkGMjemNdg/6utwdgUxzc=
+github.com/meinside/infisical-go v0.0.18/go.mod h1:cfQHaBT5VIzQISkrmJj/AUkyxGMoTBy8ENNEL0TJ02E=
 github.com/meinside/openai-go v0.3.0 h1:9Tui3SvAQUjIeinaPsjqavkGcU4WEAzFhYfPigpIOvM=
 github.com/meinside/openai-go v0.3.0/go.mod h1:dgAFcjVzLjIwKgjSycPHjkml63gBRi4b/k7BskxaNaI=
 github.com/meinside/telegram-bot-go v0.9.9 h1:1kNAgzoVK0l2heDUl623+Oa2XfV3V4lmETe+pWo0reQ=

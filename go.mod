@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/meinside/geektoken v0.0.1
-	github.com/meinside/infisical-go v0.0.13
+	github.com/meinside/infisical-go v0.0.18
 	github.com/meinside/openai-go v0.3.0
 	github.com/meinside/telegram-bot-go v0.9.9
 	github.com/meinside/version-go v0.0.2
