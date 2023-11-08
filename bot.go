@@ -306,8 +306,9 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, db *Database, messa
 
 		var answer string
 		if len(response.Choices) > 0 {
-			if response.Choices[0].Message.Content != nil {
-				answer = *response.Choices[0].Message.Content
+			var contentErr error
+			if answer, contentErr = response.Choices[0].Message.ContentString(); contentErr != nil {
+				answer = contentErr.Error()
 			}
 		} else {
 			answer = "There was no response from OpenAI API."
@@ -503,8 +504,8 @@ func messagesToPrompt(messages []openai.ChatMessage) string {
 	lines := []string{}
 
 	for _, message := range messages {
-		if message.Content != nil {
-			lines = append(lines, fmt.Sprintf("[%s] %s", message.Role, *message.Content))
+		if content, err := message.ContentString(); err == nil {
+			lines = append(lines, fmt.Sprintf("[%s] %s", message.Role, content))
 		}
 	}
 
