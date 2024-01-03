@@ -278,7 +278,9 @@ func send(bot *tg.Bot, conf config, message string, chatID int64, messageID *int
 	options := tg.OptionsSendMessage{}.
 		SetParseMode(tg.ParseModeHTML)
 	if messageID != nil {
-		options.SetReplyToMessageID(*messageID)
+		options.SetReplyParameters(tg.ReplyParameters{
+			MessageID: *messageID,
+		})
 	}
 	if res := bot.SendMessage(chatID, message, options); !res.Ok {
 		log.Printf("failed to send message: %s", *res.Description)
@@ -325,7 +327,7 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, db *Database, messa
 				chatID,
 				file,
 				tg.OptionsSendDocument{}.
-					SetReplyToMessageID(messageID).
+					SetReplyParameters(tg.ReplyParameters{MessageID: messageID}).
 					SetCaption(strings.ToValidUTF8(answer[:128], "")+"...")); res.Ok {
 				// save to database (successful)
 				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), answer, uint(response.Usage.CompletionTokens), true)
@@ -343,7 +345,7 @@ func answer(bot *tg.Bot, client *openai.Client, conf config, db *Database, messa
 				chatID,
 				answer,
 				tg.OptionsSendMessage{}.
-					SetReplyToMessageID(messageID)); res.Ok {
+					SetReplyParameters(tg.ReplyParameters{MessageID: messageID})); res.Ok {
 				// save to database (successful)
 				savePromptAndResult(db, chatID, userID, username, messagesToPrompt(messages), uint(response.Usage.PromptTokens), answer, uint(response.Usage.CompletionTokens), true)
 			} else {
