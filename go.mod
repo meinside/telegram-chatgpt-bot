@@ -4,10 +4,10 @@ go 1.21.3
 
 require (
 	github.com/meinside/geektoken v0.0.2
-	github.com/meinside/infisical-go v0.1.1
+	github.com/meinside/infisical-go v0.1.2
 	github.com/meinside/openai-go v0.4.3
-	github.com/meinside/telegram-bot-go v0.10.0
-	github.com/meinside/version-go v0.0.2
+	github.com/meinside/telegram-bot-go v0.10.3
+	github.com/meinside/version-go v0.0.3
 	gorm.io/driver/sqlite v1.5.4
 	gorm.io/gorm v1.25.5
 )
