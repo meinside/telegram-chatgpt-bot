@@ -18,6 +18,8 @@ import (
 	"github.com/meinside/openai-go"
 	tg "github.com/meinside/telegram-bot-go"
 	"github.com/meinside/version-go"
+
+	"github.com/tailscale/hujson"
 )
 
 const (
@@ -80,40 +82,53 @@ type config struct {
 func loadConfig(fpath string) (conf config, err error) {
 	var bytes []byte
 	if bytes, err = os.ReadFile(fpath); err == nil {
-		if err = json.Unmarshal(bytes, &conf); err == nil {
-			if (conf.TelegramBotToken == "" || conf.OpenAIAPIKey == "" || conf.OpenAIOrganizationID == "") && conf.Infisical != nil {
-				// read token and api key from infisical
-				var botToken, apiKey, orgID string
+		if bytes, err = standardizeJSON(bytes); err == nil {
+			if err = json.Unmarshal(bytes, &conf); err == nil {
+				if (conf.TelegramBotToken == "" || conf.OpenAIAPIKey == "" || conf.OpenAIOrganizationID == "") && conf.Infisical != nil {
+					// read token and api key from infisical
+					var botToken, apiKey, orgID string
 
-				var kvs map[string]string
-				kvs, err = helper.Values(
-					conf.Infisical.ClientID,
-					conf.Infisical.ClientSecret,
-					conf.Infisical.WorkspaceID,
-					conf.Infisical.Environment,
-					conf.Infisical.SecretType,
-					[]string{
-						conf.Infisical.TelegramBotTokenKeyPath,
-						conf.Infisical.OpenAIAPIKeyKeyPath,
-						conf.Infisical.OpenAIOrganizationIDKeyPath,
-					},
-				)
+					var kvs map[string]string
+					kvs, err = helper.Values(
+						conf.Infisical.ClientID,
+						conf.Infisical.ClientSecret,
+						conf.Infisical.WorkspaceID,
+						conf.Infisical.Environment,
+						conf.Infisical.SecretType,
+						[]string{
+							conf.Infisical.TelegramBotTokenKeyPath,
+							conf.Infisical.OpenAIAPIKeyKeyPath,
+							conf.Infisical.OpenAIOrganizationIDKeyPath,
+						},
+					)
 
-				var exists bool
-				if botToken, exists = kvs[conf.Infisical.TelegramBotTokenKeyPath]; exists {
-					conf.TelegramBotToken = botToken
-				}
-				if apiKey, exists = kvs[conf.Infisical.OpenAIAPIKeyKeyPath]; exists {
-					conf.OpenAIAPIKey = apiKey
-				}
-				if orgID, exists = kvs[conf.Infisical.OpenAIOrganizationIDKeyPath]; exists {
-					conf.OpenAIOrganizationID = orgID
+					var exists bool
+					if botToken, exists = kvs[conf.Infisical.TelegramBotTokenKeyPath]; exists {
+						conf.TelegramBotToken = botToken
+					}
+					if apiKey, exists = kvs[conf.Infisical.OpenAIAPIKeyKeyPath]; exists {
+						conf.OpenAIAPIKey = apiKey
+					}
+					if orgID, exists = kvs[conf.Infisical.OpenAIOrganizationIDKeyPath]; exists {
+						conf.OpenAIOrganizationID = orgID
+					}
 				}
 			}
 		}
 	}
 
 	return conf, err
+}
+
+// standardize given JSON (JWCC) bytes
+func standardizeJSON(b []byte) ([]byte, error) {
+	ast, err := hujson.Parse(b)
+	if err != nil {
+		return b, err
+	}
+	ast.Standardize()
+
+	return ast.Pack(), nil
 }
 
 // launch bot with given parameters
