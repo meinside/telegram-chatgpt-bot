@@ -63,12 +63,10 @@ type config struct {
 
 	// or Infisical settings
 	Infisical *struct {
-		// NOTE: When the workspace's E2EE setting is enabled, APIKey is essential for decryption
-		E2EE   bool    `json:"e2ee,omitempty"`
-		APIKey *string `json:"api_key,omitempty"`
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
 
 		WorkspaceID string               `json:"workspace_id"`
-		Token       string               `json:"token"`
 		Environment string               `json:"environment"`
 		SecretType  infisical.SecretType `json:"secret_type"`
 
@@ -88,32 +86,18 @@ func loadConfig(fpath string) (conf config, err error) {
 				var botToken, apiKey, orgID string
 
 				var kvs map[string]string
-				if conf.Infisical.E2EE && conf.Infisical.APIKey != nil {
-					kvs, err = helper.E2EEValues(
-						*conf.Infisical.APIKey,
-						conf.Infisical.WorkspaceID,
-						conf.Infisical.Token,
-						conf.Infisical.Environment,
-						conf.Infisical.SecretType,
-						[]string{
-							conf.Infisical.TelegramBotTokenKeyPath,
-							conf.Infisical.OpenAIAPIKeyKeyPath,
-							conf.Infisical.OpenAIOrganizationIDKeyPath,
-						},
-					)
-				} else {
-					kvs, err = helper.Values(
-						conf.Infisical.WorkspaceID,
-						conf.Infisical.Token,
-						conf.Infisical.Environment,
-						conf.Infisical.SecretType,
-						[]string{
-							conf.Infisical.TelegramBotTokenKeyPath,
-							conf.Infisical.OpenAIAPIKeyKeyPath,
-							conf.Infisical.OpenAIOrganizationIDKeyPath,
-						},
-					)
-				}
+				kvs, err = helper.Values(
+					conf.Infisical.ClientID,
+					conf.Infisical.ClientSecret,
+					conf.Infisical.WorkspaceID,
+					conf.Infisical.Environment,
+					conf.Infisical.SecretType,
+					[]string{
+						conf.Infisical.TelegramBotTokenKeyPath,
+						conf.Infisical.OpenAIAPIKeyKeyPath,
+						conf.Infisical.OpenAIOrganizationIDKeyPath,
+					},
+				)
 
 				var exists bool
 				if botToken, exists = kvs[conf.Infisical.TelegramBotTokenKeyPath]; exists {
