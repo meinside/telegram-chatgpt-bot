@@ -55,8 +55,10 @@ You can use [Infisical](https://infisical.com/) for retrieving your bot token an
   "verbose": false,
 
   "infisical": {
+    "client_id": "012345-abcdefg-987654321",
+    "client_secret": "aAbBcCdDeEfFgG0123456789xyzwXYZW",
+
     "workspace_id": "012345abcdefg",
-    "token": "st.xyzwabcd.0987654321.abcdefghijklmnop",
     "environment": "dev",
     "secret_type": "shared",
 
@@ -66,32 +68,6 @@ You can use [Infisical](https://infisical.com/) for retrieving your bot token an
   }
 }
 ```
-
-If your Infisical workspace's E2EE setting is enabled, you also need to provide your API key:
-
-```json
-{
-  "allowed_telegram_users": ["user1", "user2"],
-  "openai_model": "gpt-3.5-turbo",
-  "db_filepath": null,
-  "verbose": false,
-
-  "infisical": {
-    "e2ee": true,
-    "api_key": "ak.1234567890.abcdefghijk",
-
-    "workspace_id": "012345abcdefg",
-    "token": "st.xyzwabcd.0987654321.abcdefghijklmnop",
-    "environment": "dev",
-    "secret_type": "shared",
-
-    "telegram_bot_token_key_path": "/path/to/your/KEY_TO_CHATGPT_BOT_TOKEN",
-    "openai_api_key_key_path": "/path/to/your/KEY_TO_OPENAI_API_KEY",
-    "openai_org_id_key_path": "/path/to/your/KEY_TO_OPENAI_ORG_ID"
-  }
-}
-```
-
 
 ## Build
 
